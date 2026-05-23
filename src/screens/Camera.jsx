@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect } from 'react'
 
 function formatDate(isoDate) {
   if (!isoDate) return ''
@@ -10,9 +10,46 @@ function formatDate(isoDate) {
   return `${day} de ${months[month - 1]} de ${year}`
 }
 
+function CameraIcon({ color }) {
+  return (
+    <svg width="28" height="24" viewBox="0 0 28 24" fill="none" aria-hidden="true">
+      <rect x="1" y="5" width="26" height="17" rx="3.5" stroke={color} strokeWidth="1.8" />
+      <circle cx="14" cy="13.5" r="5" stroke={color} strokeWidth="1.8" />
+      <path d="M9 5L11 1H17L19 5" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+      <circle cx="23" cy="9" r="1.5" fill={color} />
+    </svg>
+  )
+}
+
+function GalleryIcon({ color }) {
+  return (
+    <svg width="28" height="24" viewBox="0 0 28 24" fill="none" aria-hidden="true">
+      <rect x="1" y="1" width="26" height="22" rx="3.5" stroke={color} strokeWidth="1.8" />
+      <circle cx="8.5" cy="8.5" r="2.5" stroke={color} strokeWidth="1.8" />
+      <path d="M1 17L9 10L14 15L19 11L27 17" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  )
+}
+
 export default function Camera({ date, onBack, onCapture, onReview }) {
   const [image, setImage] = useState(null)
-  const inputRef = useRef(null)
+  const [stream, setStream] = useState(null)
+  const cameraInputRef = useRef(null)
+  const galleryInputRef = useRef(null)
+  const videoRef = useRef(null)
+  const canvasRef = useRef(null)
+
+  // Attach stream to video element after render
+  useEffect(() => {
+    if (stream && videoRef.current) {
+      videoRef.current.srcObject = stream
+    }
+  }, [stream])
+
+  // Stop stream tracks on unmount or when stream changes
+  useEffect(() => {
+    return () => { stream?.getTracks().forEach(t => t.stop()) }
+  }, [stream])
 
   function handleFileChange(e) {
     const file = e.target.files?.[0]
@@ -20,30 +57,61 @@ export default function Camera({ date, onBack, onCapture, onReview }) {
     const reader = new FileReader()
     reader.onload = (ev) => setImage(ev.target.result)
     reader.readAsDataURL(file)
+    e.target.value = '' // allow re-selecting the same file
   }
 
-  function openPicker() {
-    inputRef.current?.click()
+  async function handleCameraClick() {
+    const isMobile = /Mobi|Android|iPhone|iPad/i.test(navigator.userAgent)
+    if (isMobile || !navigator.mediaDevices?.getUserMedia) {
+      cameraInputRef.current?.click()
+      return
+    }
+    try {
+      const s = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' }, audio: false })
+      setStream(s)
+    } catch {
+      // Permission denied or no camera — fall back to file picker
+      cameraInputRef.current?.click()
+    }
+  }
+
+  function captureFromWebcam() {
+    const video = videoRef.current
+    const canvas = canvasRef.current
+    if (!video || !canvas) return
+    canvas.width = video.videoWidth
+    canvas.height = video.videoHeight
+    canvas.getContext('2d').drawImage(video, 0, 0)
+    setImage(canvas.toDataURL('image/jpeg', 0.92))
+    stopStream()
+  }
+
+  function stopStream() {
+    stream?.getTracks().forEach(t => t.stop())
+    setStream(null)
   }
 
   function handleExtract() {
     // API call wired in next session
   }
 
+  // Press-scale handlers shared across buttons
+  const press = {
+    onMouseDown:  (e) => { e.currentTarget.style.transform = 'scale(0.98)' },
+    onMouseUp:    (e) => { e.currentTarget.style.transform = 'scale(1)' },
+    onMouseLeave: (e) => { e.currentTarget.style.transform = 'scale(1)' },
+    onTouchStart: (e) => { e.currentTarget.style.transform = 'scale(0.98)' },
+    onTouchEnd:   (e) => { e.currentTarget.style.transform = 'scale(1)' },
+  }
+
   return (
     <div
       className="min-h-dvh flex flex-col"
-      style={{ background: 'var(--navy)', fontFamily: 'Outfit, sans-serif', color: '#ffffff' }}
+      style={{ background: '#172137', fontFamily: 'Outfit, sans-serif', color: '#ffffff' }}
     >
       {/* ── Header ── */}
-      <header
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          padding: '16px 20px 12px',
-        }}
-      >
-        {/* Back — same visual width as the right spacer so monogram stays centered */}
+      <header style={{ display: 'flex', alignItems: 'center', padding: '16px 20px 12px' }}>
+        {/* Back button — 44px wide, 64px tall touch target */}
         <button
           onClick={onBack}
           aria-label="Volver a selección de fecha"
@@ -62,10 +130,11 @@ export default function Camera({ date, onBack, onCapture, onReview }) {
             padding: 0,
             opacity: 0.8,
             flexShrink: 0,
+            touchAction: 'manipulation',
             transition: 'opacity 150ms ease, transform 100ms ease',
           }}
           onMouseEnter={(e) => { e.currentTarget.style.opacity = '1' }}
-          onMouseLeave={(e) => { e.currentTarget.style.opacity = '0.8' }}
+          onMouseLeave={(e) => { e.currentTarget.style.opacity = '0.8'; e.currentTarget.style.transform = 'scale(1)' }}
           onMouseDown={(e) => { e.currentTarget.style.transform = 'scale(0.9)' }}
           onMouseUp={(e) => { e.currentTarget.style.transform = 'scale(1)' }}
           onTouchStart={(e) => { e.currentTarget.style.transform = 'scale(0.9)' }}
@@ -74,16 +143,8 @@ export default function Camera({ date, onBack, onCapture, onReview }) {
           ←
         </button>
 
-        {/* Monogram + date — flex-grow so it centers across the full row */}
-        <div
-          style={{
-            flex: 1,
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-            gap: '5px',
-          }}
-        >
+        {/* Monogram + date — flex-grow centers it across the full header */}
+        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '5px' }}>
           <span
             style={{
               fontSize: 'clamp(26px, 8vw, 38px)',
@@ -96,137 +157,216 @@ export default function Camera({ date, onBack, onCapture, onReview }) {
           >
             RMV
           </span>
-          <span
-            style={{
-              fontSize: '12px',
-              fontWeight: 400,
-              letterSpacing: '0.04em',
-              color: 'rgba(255,255,255,0.45)',
-              textAlign: 'center',
-            }}
-          >
+          <span style={{
+            fontSize: '12px',
+            fontWeight: 400,
+            letterSpacing: '0.04em',
+            color: 'rgba(255,255,255,0.45)',
+            textAlign: 'center',
+          }}>
             Pacientes del {formatDate(date)}
           </span>
         </div>
 
-        {/* Spacer — mirrors back button width so monogram stays optically centered */}
+        {/* Spacer mirrors back button width so monogram stays optically centered */}
         <div style={{ width: '44px', flexShrink: 0 }} aria-hidden="true" />
       </header>
 
       {/* ── Main content ── */}
-      <main
-        style={{
-          flex: 1,
-          display: 'flex',
-          flexDirection: 'column',
-          alignItems: 'center',
-          justifyContent: 'center',
-          padding: '24px 24px 48px',
-          gap: '16px',
-        }}
-      >
-        <div
-          style={{
+      <main style={{
+        flex: 1,
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: '24px 24px 48px',
+        gap: '16px',
+      }}>
+        <div style={{ width: '100%', maxWidth: '420px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
+
+          {/* ── Upload / preview / webcam zone ── */}
+          <div style={{
             width: '100%',
-            maxWidth: '420px',
-            display: 'flex',
-            flexDirection: 'column',
-            gap: '16px',
-          }}
-        >
-          {/* ── Upload / preview zone ── */}
-          <div
-            role="button"
-            tabIndex={0}
-            aria-label="Fotografiar o seleccionar historia clínica"
-            onClick={openPicker}
-            onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') openPicker() }}
-            style={{
-              width: '100%',
-              aspectRatio: '4 / 3',
-              borderRadius: '16px',
-              border: image
-                ? '2px solid rgba(255,255,255,0.65)'
-                : '2px dashed rgba(255,255,255,0.25)',
-              background: image ? 'none' : 'rgba(255,255,255,0.04)',
-              cursor: 'pointer',
-              display: 'flex',
-              flexDirection: 'column',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: '14px',
-              overflow: 'hidden',
-              transition: 'border-color 200ms ease, background 200ms ease',
-              outline: 'none',
-            }}
-            onFocus={(e) => {
-              if (!image) e.currentTarget.style.borderColor = 'rgba(255,255,255,0.5)'
-            }}
-            onBlur={(e) => {
-              if (!image) e.currentTarget.style.borderColor = 'rgba(255,255,255,0.25)'
-            }}
-            onMouseEnter={(e) => {
-              if (!image) e.currentTarget.style.background = 'rgba(255,255,255,0.07)'
-            }}
-            onMouseLeave={(e) => {
-              if (!image) e.currentTarget.style.background = 'rgba(255,255,255,0.04)'
-            }}
-          >
+            borderRadius: '16px',
+            border: image
+              ? '2px solid rgba(255,255,255,0.65)'
+              : '2px dashed rgba(255,255,255,0.22)',
+            background: image ? 'none' : 'rgba(255,255,255,0.04)',
+            overflow: 'hidden',
+            transition: 'border-color 200ms ease',
+          }}>
+
             {image ? (
+              /* ── Preview state ── */
               <img
                 src={image}
                 alt="Historia clínica seleccionada"
-                style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
+                style={{ width: '100%', aspectRatio: '4 / 3', objectFit: 'cover', display: 'block' }}
               />
+            ) : stream ? (
+              /* ── Webcam state ── */
+              <div style={{ position: 'relative' }}>
+                <video
+                  ref={videoRef}
+                  autoPlay
+                  playsInline
+                  muted
+                  style={{ width: '100%', aspectRatio: '4 / 3', objectFit: 'cover', display: 'block' }}
+                />
+                {/* Capture / cancel bar — flat navy, no gradient */}
+                <div style={{
+                  position: 'absolute',
+                  bottom: 0,
+                  left: 0,
+                  right: 0,
+                  padding: '12px 16px',
+                  background: 'rgba(23,33,55,0.88)',
+                  display: 'flex',
+                  gap: '12px',
+                }}>
+                  <button
+                    onClick={stopStream}
+                    style={{
+                      flex: 1,
+                      fontFamily: 'Outfit, sans-serif',
+                      fontSize: '15px',
+                      fontWeight: 500,
+                      color: 'rgba(255,255,255,0.72)',
+                      background: 'transparent',
+                      border: '1.5px solid rgba(255,255,255,0.28)',
+                      borderRadius: '10px',
+                      padding: '12px',
+                      minHeight: '48px',
+                      cursor: 'pointer',
+                      touchAction: 'manipulation',
+                      transition: 'transform 100ms ease',
+                    }}
+                    {...press}
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    onClick={captureFromWebcam}
+                    style={{
+                      flex: 2,
+                      fontFamily: 'Outfit, sans-serif',
+                      fontSize: '15px',
+                      fontWeight: 600,
+                      color: '#172137',
+                      background: '#ffffff',
+                      border: 'none',
+                      borderRadius: '10px',
+                      padding: '12px',
+                      minHeight: '48px',
+                      cursor: 'pointer',
+                      touchAction: 'manipulation',
+                      transition: 'transform 100ms ease',
+                    }}
+                    {...press}
+                  >
+                    Capturar foto
+                  </button>
+                </div>
+              </div>
             ) : (
-              <>
-                {/* Camera icon — inline SVG, no library */}
-                <svg
-                  width="44"
-                  height="36"
-                  viewBox="0 0 44 36"
-                  fill="none"
-                  aria-hidden="true"
-                  style={{ opacity: 0.45 }}
-                >
-                  <rect x="1" y="8" width="42" height="26" rx="5" stroke="white" strokeWidth="1.8" />
-                  <circle cx="22" cy="21" r="8" stroke="white" strokeWidth="1.8" />
-                  <path d="M15 8L17.5 2H26.5L29 8" stroke="white" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
-                  <circle cx="36" cy="14" r="2" fill="white" />
-                </svg>
+              /* ── Empty state: two option buttons ── */
+              <div style={{ padding: '28px 20px', display: 'flex', flexDirection: 'column', gap: '14px' }}>
 
-                <span
+                {/* PRIMARY — solid white, navy text, camera icon */}
+                <button
+                  onClick={handleCameraClick}
+                  aria-label="Fotografiar historia clínica del paciente"
                   style={{
+                    fontFamily: 'Outfit, sans-serif',
                     fontSize: '17px',
-                    fontWeight: 500,
-                    color: '#ffffff',
-                    textAlign: 'center',
-                    lineHeight: 1.3,
+                    fontWeight: 600,
+                    color: '#172137',
+                    background: '#ffffff',
+                    border: 'none',
+                    borderRadius: '12px',
+                    padding: '18px 20px',
+                    minHeight: '72px',
+                    width: '100%',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    gap: '8px',
+                    touchAction: 'manipulation',
+                    transition: 'transform 150ms ease',
                     letterSpacing: '0.01em',
-                    padding: '0 16px',
                   }}
+                  {...press}
                 >
+                  <CameraIcon color="#172137" />
                   Fotografiar historia clínica
-                </span>
+                </button>
 
-                <span
-                  style={{
+                {/* Divider */}
+                <div style={{ display: 'flex', alignItems: 'center' }} aria-hidden="true">
+                  <div style={{ flex: 1, height: '1px', background: 'rgba(255,255,255,0.18)' }} />
+                  <span style={{
+                    padding: '0 14px',
                     fontSize: '13px',
                     fontWeight: 400,
-                    color: 'rgba(255,255,255,0.4)',
-                    textAlign: 'center',
+                    color: 'rgba(255,255,255,0.38)',
+                    letterSpacing: '0.06em',
+                    lineHeight: 1,
+                  }}>
+                    o
+                  </span>
+                  <div style={{ flex: 1, height: '1px', background: 'rgba(255,255,255,0.18)' }} />
+                </div>
+
+                {/* SECONDARY — ghost button, white border, white text, gallery icon */}
+                <button
+                  onClick={() => galleryInputRef.current?.click()}
+                  aria-label="Elegir imagen de galería, fotos o archivos"
+                  style={{
+                    fontFamily: 'Outfit, sans-serif',
+                    fontSize: '15px',
+                    fontWeight: 500,
+                    color: '#ffffff',
+                    background: 'transparent',
+                    border: '1.5px solid rgba(255,255,255,0.32)',
+                    borderRadius: '12px',
+                    padding: '14px 20px',
+                    minHeight: '64px',
+                    width: '100%',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    gap: '7px',
+                    touchAction: 'manipulation',
+                    transition: 'transform 150ms ease, background 150ms ease, border-color 150ms ease',
                     letterSpacing: '0.01em',
                   }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.background = 'rgba(255,255,255,0.07)'
+                    e.currentTarget.style.borderColor = 'rgba(255,255,255,0.55)'
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.background = 'transparent'
+                    e.currentTarget.style.borderColor = 'rgba(255,255,255,0.32)'
+                    e.currentTarget.style.transform = 'scale(1)'
+                  }}
+                  onMouseDown={(e) => { e.currentTarget.style.transform = 'scale(0.98)' }}
+                  onMouseUp={(e) => { e.currentTarget.style.transform = 'scale(1)' }}
+                  onTouchStart={(e) => { e.currentTarget.style.transform = 'scale(0.98)' }}
+                  onTouchEnd={(e) => { e.currentTarget.style.transform = 'scale(1)' }}
                 >
-                  o toca para seleccionar una imagen
-                </span>
-              </>
+                  <GalleryIcon color="#ffffff" />
+                  Elegir de fotos o archivos
+                </button>
+
+              </div>
             )}
           </div>
 
-          {/* Hidden file input */}
+          {/* Hidden inputs */}
           <input
-            ref={inputRef}
+            ref={cameraInputRef}
             type="file"
             accept="image/*"
             capture="environment"
@@ -235,11 +375,23 @@ export default function Camera({ date, onBack, onCapture, onReview }) {
             aria-hidden="true"
             tabIndex={-1}
           />
+          <input
+            ref={galleryInputRef}
+            type="file"
+            accept="image/*"
+            onChange={handleFileChange}
+            style={{ display: 'none' }}
+            aria-hidden="true"
+            tabIndex={-1}
+          />
 
-          {/* Change image — only when preview is showing */}
+          {/* Offscreen canvas for webcam snapshot */}
+          <canvas ref={canvasRef} style={{ display: 'none' }} aria-hidden="true" />
+
+          {/* "Cambiar imagen" — returns to two-button zone so user picks again */}
           {image && (
             <button
-              onClick={openPicker}
+              onClick={() => setImage(null)}
               style={{
                 fontFamily: 'Outfit, sans-serif',
                 fontSize: '13px',
@@ -253,6 +405,7 @@ export default function Camera({ date, onBack, onCapture, onReview }) {
                 textDecorationColor: 'rgba(255,255,255,0.25)',
                 textUnderlineOffset: '3px',
                 padding: '2px 0',
+                touchAction: 'manipulation',
                 transition: 'color 150ms ease',
               }}
               onMouseEnter={(e) => { e.currentTarget.style.color = 'rgba(255,255,255,0.75)' }}
@@ -279,12 +432,13 @@ export default function Camera({ date, onBack, onCapture, onReview }) {
               width: '100%',
               minHeight: '64px',
               cursor: image ? 'pointer' : 'default',
+              touchAction: 'manipulation',
               transition: 'background 200ms ease, color 200ms ease, transform 100ms ease',
               letterSpacing: '0.02em',
-              marginTop: image ? '0' : '8px',
             }}
             onMouseDown={(e) => { if (image) e.currentTarget.style.transform = 'scale(0.98)' }}
             onMouseUp={(e) => { e.currentTarget.style.transform = 'scale(1)' }}
+            onMouseLeave={(e) => { e.currentTarget.style.transform = 'scale(1)' }}
             onTouchStart={(e) => { if (image) e.currentTarget.style.transform = 'scale(0.98)' }}
             onTouchEnd={(e) => { e.currentTarget.style.transform = 'scale(1)' }}
           >
@@ -292,19 +446,18 @@ export default function Camera({ date, onBack, onCapture, onReview }) {
           </button>
 
           {/* Privacy note */}
-          <p
-            style={{
-              fontSize: '12px',
-              fontWeight: 400,
-              color: 'rgba(255,255,255,0.28)',
-              textAlign: 'center',
-              margin: 0,
-              letterSpacing: '0.02em',
-              lineHeight: 1.5,
-            }}
-          >
+          <p style={{
+            fontSize: '12px',
+            fontWeight: 400,
+            color: 'rgba(255,255,255,0.28)',
+            textAlign: 'center',
+            margin: 0,
+            letterSpacing: '0.02em',
+            lineHeight: 1.5,
+          }}>
             Los datos se procesan de forma segura y no se almacenan
           </p>
+
         </div>
       </main>
     </div>
