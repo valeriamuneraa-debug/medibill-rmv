@@ -34,6 +34,8 @@ function GalleryIcon({ color }) {
 export default function Camera({ date, onBack, onCapture, onReview }) {
   const [image, setImage] = useState(null)
   const [stream, setStream] = useState(null)
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState(null)
   const cameraInputRef = useRef(null)
   const galleryInputRef = useRef(null)
   const videoRef = useRef(null)
@@ -91,8 +93,24 @@ export default function Camera({ date, onBack, onCapture, onReview }) {
     setStream(null)
   }
 
-  function handleExtract() {
-    // API call wired in next session
+  async function handleExtract() {
+    if (!image || loading) return
+    setLoading(true)
+    setError(null)
+    try {
+      const resp = await fetch('/api/extract', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ image }),
+      })
+      if (!resp.ok) throw new Error(`HTTP ${resp.status}`)
+      const patient = await resp.json()
+      onReview(patient, image)
+    } catch {
+      setError('No se pudo extraer la información. Intenta de nuevo.')
+    } finally {
+      setLoading(false)
+    }
   }
 
   // Press-scale handlers shared across buttons
@@ -418,32 +436,70 @@ export default function Camera({ date, onBack, onCapture, onReview }) {
           {/* ── Extraer datos ── */}
           <button
             onClick={handleExtract}
-            disabled={!image}
-            aria-disabled={!image}
+            disabled={!image || loading}
+            aria-disabled={!image || loading}
+            aria-busy={loading}
             style={{
               fontFamily: 'Outfit, sans-serif',
               fontSize: '18px',
               fontWeight: 600,
-              color: image ? '#172137' : 'rgba(23,33,55,0.45)',
-              background: image ? '#ffffff' : 'rgba(255,255,255,0.22)',
+              color: (image && !loading) ? '#172137' : 'rgba(23,33,55,0.45)',
+              background: (image && !loading) ? '#ffffff' : 'rgba(255,255,255,0.22)',
               border: 'none',
               borderRadius: '12px',
               padding: '20px',
               width: '100%',
               minHeight: '64px',
-              cursor: image ? 'pointer' : 'default',
+              cursor: (image && !loading) ? 'pointer' : 'default',
               touchAction: 'manipulation',
               transition: 'background 200ms ease, color 200ms ease, transform 100ms ease',
               letterSpacing: '0.02em',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '10px',
             }}
-            onMouseDown={(e) => { if (image) e.currentTarget.style.transform = 'scale(0.98)' }}
+            onMouseDown={(e) => { if (image && !loading) e.currentTarget.style.transform = 'scale(0.98)' }}
             onMouseUp={(e) => { e.currentTarget.style.transform = 'scale(1)' }}
             onMouseLeave={(e) => { e.currentTarget.style.transform = 'scale(1)' }}
-            onTouchStart={(e) => { if (image) e.currentTarget.style.transform = 'scale(0.98)' }}
+            onTouchStart={(e) => { if (image && !loading) e.currentTarget.style.transform = 'scale(0.98)' }}
             onTouchEnd={(e) => { e.currentTarget.style.transform = 'scale(1)' }}
           >
-            Extraer datos
+            {loading ? (
+              <>
+                <div
+                  className="animate-spin"
+                  style={{
+                    width: '18px',
+                    height: '18px',
+                    border: '2.5px solid rgba(23,33,55,0.18)',
+                    borderTopColor: 'rgba(23,33,55,0.6)',
+                    borderRadius: '50%',
+                    flexShrink: 0,
+                  }}
+                />
+                Extrayendo datos...
+              </>
+            ) : 'Extraer datos'}
           </button>
+
+          {/* Inline error — shows below button, never navigates away */}
+          {error && (
+            <p
+              role="alert"
+              style={{
+                fontSize: '13px',
+                fontWeight: 400,
+                color: 'rgba(255,120,120,0.9)',
+                textAlign: 'center',
+                margin: '-4px 0 0',
+                lineHeight: 1.5,
+                letterSpacing: '0.01em',
+              }}
+            >
+              {error}
+            </p>
+          )}
 
           {/* Privacy note */}
           <p style={{

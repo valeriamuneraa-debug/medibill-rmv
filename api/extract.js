@@ -4,6 +4,39 @@ import Anthropic from '@anthropic-ai/sdk'
 
 const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
 
+const EXTRACTION_PROMPT = `Eres un asistente médico especializado en documentos clínicos de Colombia. Extrae la información del paciente de esta imagen de historia clínica u otro documento médico colombiano.
+
+Responde ÚNICAMENTE con un objeto JSON con esta estructura exacta (usa null si el dato no aparece en el documento):
+{
+  "nombre": "nombre completo del paciente tal como aparece en el documento",
+  "id": "número de cédula o documento de identidad (solo dígitos, sin espacios ni puntos ni comas)",
+  "edad": "edad del paciente en años (solo el número, sin la palabra 'años')",
+  "telefono": "número de teléfono o celular del paciente",
+  "direccion": "dirección de residencia completa del paciente",
+  "email": "correo electrónico del paciente",
+  "confidence": {
+    "nombre": 0.95,
+    "id": 0.80,
+    "edad": 0.90,
+    "telefono": 0.70,
+    "direccion": 0.85,
+    "email": 0.60
+  }
+}
+
+Escala de confidence (0.0 a 1.0):
+- 0.9–1.0: texto claramente legible, sin ambigüedad
+- 0.7–0.8: texto mayormente legible con dudas menores
+- 0.5–0.6: texto parcialmente ilegible o inferido por contexto
+- 0.0–0.4: no encontrado o completamente ilegible
+
+Reglas:
+- Extrae exactamente lo que está escrito en el documento, sin corregir ni completar datos
+- Para "id": devuelve solo dígitos, sin puntos ni comas ni espacios
+- Para "edad": devuelve solo el número (ejemplo: "45", no "45 años")
+- Si no es una historia clínica, extrae lo que puedas de los campos disponibles
+- No inventes ni supongas datos que no estén visibles en la imagen`
+
 export default async function handler(req) {
   if (req.method !== 'POST') {
     return new Response(JSON.stringify({ message: 'Method not allowed' }), { status: 405 })
@@ -26,7 +59,7 @@ export default async function handler(req) {
 
   try {
     const message = await client.messages.create({
-      model: 'claude-opus-4-7',
+      model: 'claude-sonnet-4-20250514',
       max_tokens: 1024,
       messages: [
         {
@@ -36,18 +69,7 @@ export default async function handler(req) {
               type: 'image',
               source: { type: 'base64', media_type: mediaType, data: base64Data },
             },
-            {
-              type: 'text',
-              text: `Extrae la información del paciente de esta imagen médica.
-Responde SOLO con un objeto JSON con estos campos (usa null si no encuentras el valor):
-{
-  "name": "nombre completo del paciente",
-  "procedure": "procedimiento o diagnóstico",
-  "value": "valor o costo en pesos colombianos (número sin puntos ni comas)",
-  "eps": "EPS o aseguradora",
-  "notes": "otras notas relevantes"
-}`,
-            },
+            { type: 'text', text: EXTRACTION_PROMPT },
           ],
         },
       ],

@@ -16,6 +16,8 @@ export default function App() {
   const [session, setSession] = useState({
     date: null,
     patients: [],
+    currentPatient: null,
+    currentImage: null,
   })
 
   function handleDateSelected(date) {
@@ -23,12 +25,19 @@ export default function App() {
     setScreen(SCREENS.CAMERA)
   }
 
-  function handleCapture(patientData) {
-    setSession((s) => ({ ...s, patients: [...s.patients, patientData] }))
+  function handleReview(patient, image) {
+    setSession((s) => ({ ...s, currentPatient: patient, currentImage: image }))
+    setScreen(SCREENS.REVIEW)
   }
 
-  function handleReview() {
-    setScreen(SCREENS.REVIEW)
+  function handleConfirm(editedPatient) {
+    setSession((s) => ({
+      ...s,
+      patients: [...s.patients, editedPatient],
+      currentPatient: null,
+      currentImage: null,
+    }))
+    setScreen(SCREENS.CAMERA)
   }
 
   function handleExport() {
@@ -36,7 +45,7 @@ export default function App() {
   }
 
   function handleNewSession() {
-    setSession({ date: null, patients: [] })
+    setSession({ date: null, patients: [], currentPatient: null, currentImage: null })
     setScreen(SCREENS.DATE_PICKER)
   }
 
@@ -49,7 +58,6 @@ export default function App() {
         <Camera
           date={session.date}
           onBack={() => setScreen(SCREENS.DATE_PICKER)}
-          onCapture={handleCapture}
           onReview={handleReview}
         />
       )
@@ -58,9 +66,10 @@ export default function App() {
       return (
         <Review
           date={session.date}
-          patients={session.patients}
+          patient={session.currentPatient}
+          image={session.currentImage}
           onBack={() => setScreen(SCREENS.CAMERA)}
-          onExport={handleExport}
+          onConfirm={handleConfirm}
         />
       )
 
