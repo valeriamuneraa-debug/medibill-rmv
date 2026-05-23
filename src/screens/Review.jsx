@@ -46,6 +46,7 @@ export default function Review({ date, patient, image, onBack, onConfirm }) {
     email:     patient?.email     ?? '',
   }))
   const [focusedField, setFocusedField] = useState(null)
+  const [saving, setSaving] = useState(false)
 
   const confidence = patient?.confidence ?? {}
 
@@ -110,11 +111,15 @@ export default function Review({ date, patient, image, onBack, onConfirm }) {
     !formatError('edad') &&
     !formatError('email')
 
-  function handleConfirm() {
-    if (!canConfirm) return
-    // Strip confidence from saved record
-    const { confidence: _c, ...rest } = patient ?? {}
-    onConfirm({ ...rest, ...formData })
+  async function handleConfirm() {
+    if (!canConfirm || saving) return
+    setSaving(true)
+    try {
+      const { confidence: _c, ...rest } = patient ?? {}
+      await onConfirm({ ...rest, ...formData })
+    } finally {
+      setSaving(false)
+    }
   }
 
   return (
@@ -290,31 +295,54 @@ export default function Review({ date, patient, image, onBack, onConfirm }) {
           {/* ── Agregar al registro ── */}
           <button
             onClick={handleConfirm}
-            disabled={!canConfirm}
-            aria-disabled={!canConfirm}
+            disabled={!canConfirm || saving}
+            aria-disabled={!canConfirm || saving}
+            aria-busy={saving}
             style={{
               fontFamily: 'Outfit, sans-serif',
               fontSize: '18px',
               fontWeight: 600,
-              color: canConfirm ? '#172137' : 'rgba(23,33,55,0.45)',
-              background: canConfirm ? '#ffffff' : 'rgba(255,255,255,0.22)',
+              color: (canConfirm && !saving) ? '#172137' : 'rgba(23,33,55,0.45)',
+              background: (canConfirm && !saving) ? '#ffffff' : 'rgba(255,255,255,0.22)',
               border: 'none',
               borderRadius: '12px',
               padding: '20px',
               width: '100%',
               minHeight: '64px',
-              cursor: canConfirm ? 'pointer' : 'default',
+              cursor: (canConfirm && !saving) ? 'pointer' : 'default',
               touchAction: 'manipulation',
               transition: 'background 200ms ease, color 200ms ease, transform 100ms ease',
               letterSpacing: '0.02em',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '10px',
             }}
-            onMouseDown={(e) => { if (canConfirm) e.currentTarget.style.transform = 'scale(0.98)' }}
+            onMouseDown={(e) => { if (canConfirm && !saving) e.currentTarget.style.transform = 'scale(0.98)' }}
             onMouseUp={(e) => { e.currentTarget.style.transform = 'scale(1)' }}
             onMouseLeave={(e) => { e.currentTarget.style.transform = 'scale(1)' }}
-            onTouchStart={(e) => { if (canConfirm) e.currentTarget.style.transform = 'scale(0.98)' }}
+            onTouchStart={(e) => { if (canConfirm && !saving) e.currentTarget.style.transform = 'scale(0.98)' }}
             onTouchEnd={(e) => { e.currentTarget.style.transform = 'scale(1)' }}
           >
-            Agregar al registro
+            {saving ? (
+              <>
+                <div
+                  className="animate-spin"
+                  style={{
+                    width: '18px',
+                    height: '18px',
+                    border: '2px solid rgba(23,33,55,0.2)',
+                    borderTopColor: 'rgba(23,33,55,0.6)',
+                    borderRadius: '50%',
+                    flexShrink: 0,
+                  }}
+                  aria-hidden="true"
+                />
+                Guardando...
+              </>
+            ) : (
+              'Agregar al registro'
+            )}
           </button>
 
           {/* Cancel link */}
