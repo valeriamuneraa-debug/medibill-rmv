@@ -49,13 +49,20 @@ export default async function handler(req) {
     return new Response(JSON.stringify({ message: 'Invalid JSON' }), { status: 400 })
   }
 
-  const { image } = body
+  const { image, mediaType } = body
   if (!image) {
     return new Response(JSON.stringify({ message: 'Missing image field' }), { status: 400 })
   }
 
-  const base64Data = image.replace(/^data:image\/\w+;base64,/, '')
-  const mediaType = image.startsWith('data:image/png') ? 'image/png' : 'image/jpeg'
+  // Strip data URL prefix generically — works for images and PDFs
+  const base64Data = image.replace(/^data:[^;]+;base64,/, '')
+  const effectiveMediaType = mediaType || (image.startsWith('data:image/png') ? 'image/png' : 'image/jpeg')
+  const isPdf = effectiveMediaType === 'application/pdf'
+
+  // PDFs use the document block type; images use the image block type
+  const mediaBlock = isPdf
+    ? { type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: base64Data } }
+    : { type: 'image',    source: { type: 'base64', media_type: effectiveMediaType, data: base64Data } }
 
   try {
     const message = await client.messages.create({
@@ -65,10 +72,7 @@ export default async function handler(req) {
         {
           role: 'user',
           content: [
-            {
-              type: 'image',
-              source: { type: 'base64', media_type: mediaType, data: base64Data },
-            },
+            mediaBlock,
             { type: 'text', text: EXTRACTION_PROMPT },
           ],
         },

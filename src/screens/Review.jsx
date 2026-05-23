@@ -1,5 +1,18 @@
 import { useState } from 'react'
 
+function PdfIcon({ color }) {
+  return (
+    <svg width="24" height="30" viewBox="0 0 36 44" fill="none" aria-hidden="true">
+      <path
+        d="M3 3C3 1.89543 3.89543 1 5 1H23L35 13V41C35 42.1046 34.1046 43 33 43H5C3.89543 43 3 42.1046 3 41V3Z"
+        stroke={color} strokeWidth="1.8"
+      />
+      <path d="M23 1V13H35" stroke={color} strokeWidth="1.8" strokeLinejoin="round" />
+      <path d="M9 21H27M9 27H27M9 33H18" stroke={color} strokeWidth="1.8" strokeLinecap="round" />
+    </svg>
+  )
+}
+
 function formatDate(isoDate) {
   if (!isoDate) return ''
   const [year, month, day] = isoDate.split('-').map(Number)
@@ -186,18 +199,44 @@ export default function Review({ date, patient, image, onBack, onConfirm }) {
               Verifica los datos extraídos
             </h2>
             {image && (
-              <img
-                src={image}
-                alt="Historia clínica fotografiada"
-                style={{
-                  width: '80px',
-                  height: '80px',
-                  borderRadius: '10px',
-                  border: '2px solid rgba(255,255,255,0.55)',
-                  objectFit: 'cover',
-                  flexShrink: 0,
-                }}
-              />
+              image.startsWith('data:application/pdf') ? (
+                /* PDF thumbnail — document icon placeholder */
+                <div
+                  aria-label="Documento PDF"
+                  style={{
+                    width: '80px',
+                    height: '80px',
+                    borderRadius: '10px',
+                    border: '2px solid rgba(255,255,255,0.55)',
+                    background: 'rgba(255,255,255,0.07)',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '5px',
+                    flexShrink: 0,
+                  }}
+                >
+                  <PdfIcon color="rgba(255,255,255,0.65)" />
+                  <span style={{ fontSize: '9px', fontWeight: 600, color: 'rgba(255,255,255,0.5)', letterSpacing: '0.08em' }}>
+                    PDF
+                  </span>
+                </div>
+              ) : (
+                /* Image thumbnail */
+                <img
+                  src={image}
+                  alt="Historia clínica fotografiada"
+                  style={{
+                    width: '80px',
+                    height: '80px',
+                    borderRadius: '10px',
+                    border: '2px solid rgba(255,255,255,0.55)',
+                    objectFit: 'cover',
+                    flexShrink: 0,
+                  }}
+                />
+              )
             )}
           </div>
 

@@ -10,6 +10,8 @@ function formatDate(isoDate) {
   return `${day} de ${months[month - 1]} de ${year}`
 }
 
+// ── Icons — consistent 1.8px stroke throughout ──────────────────────────────
+
 function CameraIcon({ color }) {
   return (
     <svg width="28" height="24" viewBox="0 0 28 24" fill="none" aria-hidden="true">
@@ -31,17 +33,36 @@ function GalleryIcon({ color }) {
   )
 }
 
-export default function Camera({ date, onBack, onCapture, onReview }) {
-  const [image, setImage] = useState(null)
+function PdfIcon({ color }) {
+  return (
+    <svg width="36" height="44" viewBox="0 0 36 44" fill="none" aria-hidden="true">
+      <path
+        d="M3 3C3 1.89543 3.89543 1 5 1H23L35 13V41C35 42.1046 34.1046 43 33 43H5C3.89543 43 3 42.1046 3 41V3Z"
+        stroke={color} strokeWidth="1.8"
+      />
+      <path d="M23 1V13H35" stroke={color} strokeWidth="1.8" strokeLinejoin="round" />
+      <path d="M9 21H27M9 27H27M9 33H18" stroke={color} strokeWidth="1.8" strokeLinecap="round" />
+    </svg>
+  )
+}
+
+// ── Component ────────────────────────────────────────────────────────────────
+
+export default function Camera({ date, onBack, onReview }) {
+  const [image, setImage] = useState(null)          // base64 dataURL
+  const [mediaType, setMediaType] = useState(null)  // MIME type of selected file
   const [stream, setStream] = useState(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
+
   const cameraInputRef = useRef(null)
   const galleryInputRef = useRef(null)
   const videoRef = useRef(null)
   const canvasRef = useRef(null)
 
-  // Attach stream to video element after render
+  const isPdf = mediaType === 'application/pdf'
+
+  // Attach getUserMedia stream to video element after render
   useEffect(() => {
     if (stream && videoRef.current) {
       videoRef.current.srcObject = stream
@@ -56,6 +77,8 @@ export default function Camera({ date, onBack, onCapture, onReview }) {
   function handleFileChange(e) {
     const file = e.target.files?.[0]
     if (!file) return
+    setMediaType(file.type)
+    setError(null)
     const reader = new FileReader()
     reader.onload = (ev) => setImage(ev.target.result)
     reader.readAsDataURL(file)
@@ -85,12 +108,20 @@ export default function Camera({ date, onBack, onCapture, onReview }) {
     canvas.height = video.videoHeight
     canvas.getContext('2d').drawImage(video, 0, 0)
     setImage(canvas.toDataURL('image/jpeg', 0.92))
+    setMediaType('image/jpeg')
     stopStream()
   }
 
   function stopStream() {
     stream?.getTracks().forEach(t => t.stop())
     setStream(null)
+  }
+
+  // Clears all file state and any prior error
+  function clearFile() {
+    setImage(null)
+    setMediaType(null)
+    setError(null)
   }
 
   async function handleExtract() {
@@ -101,7 +132,7 @@ export default function Camera({ date, onBack, onCapture, onReview }) {
       const resp = await fetch('/api/extract', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ image }),
+        body: JSON.stringify({ image, mediaType }),
       })
       if (!resp.ok) throw new Error(`HTTP ${resp.status}`)
       const patient = await resp.json()
@@ -113,7 +144,7 @@ export default function Camera({ date, onBack, onCapture, onReview }) {
     }
   }
 
-  // Press-scale handlers shared across buttons
+  // Shared scale-press handlers (§7 scale-feedback, §2 press-feedback)
   const press = {
     onMouseDown:  (e) => { e.currentTarget.style.transform = 'scale(0.98)' },
     onMouseUp:    (e) => { e.currentTarget.style.transform = 'scale(1)' },
@@ -215,12 +246,46 @@ export default function Camera({ date, onBack, onCapture, onReview }) {
           }}>
 
             {image ? (
-              /* ── Preview state ── */
-              <img
-                src={image}
-                alt="Historia clínica seleccionada"
-                style={{ width: '100%', aspectRatio: '4 / 3', objectFit: 'cover', display: 'block' }}
-              />
+              isPdf ? (
+                /* ── PDF placeholder — 4:3 to prevent CLS (§3 content-jumping) ── */
+                <div
+                  role="img"
+                  aria-label="Documento PDF seleccionado — listo para extraer datos"
+                  style={{
+                    aspectRatio: '4 / 3',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '12px',
+                    background: 'rgba(255,255,255,0.06)',
+                  }}
+                >
+                  <PdfIcon color="rgba(255,255,255,0.72)" />
+                  <span style={{
+                    fontSize: '15px',
+                    fontWeight: 500,
+                    color: 'rgba(255,255,255,0.85)',
+                    letterSpacing: '0.01em',
+                  }}>
+                    Documento PDF
+                  </span>
+                  <span style={{
+                    fontSize: '12px',
+                    color: 'rgba(255,255,255,0.4)',
+                    letterSpacing: '0.01em',
+                  }}>
+                    Listo para extraer datos
+                  </span>
+                </div>
+              ) : (
+                /* ── Image preview ── */
+                <img
+                  src={image}
+                  alt="Historia clínica seleccionada"
+                  style={{ width: '100%', aspectRatio: '4 / 3', objectFit: 'cover', display: 'block' }}
+                />
+              )
             ) : stream ? (
               /* ── Webcam state ── */
               <div style={{ position: 'relative' }}>
@@ -231,7 +296,7 @@ export default function Camera({ date, onBack, onCapture, onReview }) {
                   muted
                   style={{ width: '100%', aspectRatio: '4 / 3', objectFit: 'cover', display: 'block' }}
                 />
-                {/* Capture / cancel bar — flat navy, no gradient */}
+                {/* Capture / cancel bar — flat navy overlay, no gradient */}
                 <div style={{
                   position: 'absolute',
                   bottom: 0,
@@ -287,7 +352,7 @@ export default function Camera({ date, onBack, onCapture, onReview }) {
                 </div>
               </div>
             ) : (
-              /* ── Empty state: two option buttons ── */
+              /* ── Empty state: two option buttons + divider ── */
               <div style={{ padding: '28px 20px', display: 'flex', flexDirection: 'column', gap: '14px' }}>
 
                 {/* PRIMARY — solid white, navy text, camera icon */}
@@ -336,10 +401,10 @@ export default function Camera({ date, onBack, onCapture, onReview }) {
                   <div style={{ flex: 1, height: '1px', background: 'rgba(255,255,255,0.18)' }} />
                 </div>
 
-                {/* SECONDARY — ghost button, white border, white text, gallery icon */}
+                {/* SECONDARY — ghost, white border, gallery icon; accepts images + PDFs */}
                 <button
                   onClick={() => galleryInputRef.current?.click()}
-                  aria-label="Elegir imagen de galería, fotos o archivos"
+                  aria-label="Elegir imagen o documento PDF de galería o archivos"
                   style={{
                     fontFamily: 'Outfit, sans-serif',
                     fontSize: '15px',
@@ -382,11 +447,11 @@ export default function Camera({ date, onBack, onCapture, onReview }) {
             )}
           </div>
 
-          {/* Hidden inputs */}
+          {/* Hidden inputs — both accept images AND PDFs */}
           <input
             ref={cameraInputRef}
             type="file"
-            accept="image/*"
+            accept="image/*,application/pdf"
             capture="environment"
             onChange={handleFileChange}
             style={{ display: 'none' }}
@@ -396,7 +461,7 @@ export default function Camera({ date, onBack, onCapture, onReview }) {
           <input
             ref={galleryInputRef}
             type="file"
-            accept="image/*"
+            accept="image/*,application/pdf"
             onChange={handleFileChange}
             style={{ display: 'none' }}
             aria-hidden="true"
@@ -406,10 +471,10 @@ export default function Camera({ date, onBack, onCapture, onReview }) {
           {/* Offscreen canvas for webcam snapshot */}
           <canvas ref={canvasRef} style={{ display: 'none' }} aria-hidden="true" />
 
-          {/* "Cambiar imagen" — returns to two-button zone so user picks again */}
+          {/* Change file link — label adapts to file type */}
           {image && (
             <button
-              onClick={() => setImage(null)}
+              onClick={clearFile}
               style={{
                 fontFamily: 'Outfit, sans-serif',
                 fontSize: '13px',
@@ -429,7 +494,7 @@ export default function Camera({ date, onBack, onCapture, onReview }) {
               onMouseEnter={(e) => { e.currentTarget.style.color = 'rgba(255,255,255,0.75)' }}
               onMouseLeave={(e) => { e.currentTarget.style.color = 'rgba(255,255,255,0.45)' }}
             >
-              Cambiar imagen
+              {isPdf ? 'Cambiar archivo' : 'Cambiar imagen'}
             </button>
           )}
 
@@ -483,7 +548,7 @@ export default function Camera({ date, onBack, onCapture, onReview }) {
             ) : 'Extraer datos'}
           </button>
 
-          {/* Inline error — shows below button, never navigates away */}
+          {/* Inline error — never navigates away, user can retry */}
           {error && (
             <p
               role="alert"
