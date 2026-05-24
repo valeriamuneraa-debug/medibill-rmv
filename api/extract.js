@@ -26,6 +26,7 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: 'No image provided' });
     }
 
+    const cleanImage = image.includes(',') ? image.split(',')[1] : image;
     const isPDF = mediaType === 'application/pdf';
 
     const { default: Anthropic } = await import('@anthropic-ai/sdk');
@@ -37,7 +38,7 @@ export default async function handler(req, res) {
           source: {
             type: 'base64',
             media_type: 'application/pdf',
-            data: image,
+            data: cleanImage,
           },
         }
       : {
@@ -45,12 +46,12 @@ export default async function handler(req, res) {
           source: {
             type: 'base64',
             media_type: 'image/jpeg',
-            data: image,
+            data: cleanImage,
           },
         };
 
     const response = await client.messages.create({
-      model: 'claude-sonnet-4-20250514',
+      model: 'claude-sonnet-4-6',
       max_tokens: 300,
       messages: [
         {
