@@ -1,97 +1,98 @@
-export const runtime = "nodejs";
+export const runtime = 'nodejs';
 
-import Anthropic from '@anthropic-ai/sdk'
+export const config = {
+  api: {
+    bodyParser: {
+      sizeLimit: '10mb',
+    },
+  },
+};
 
-const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
+export default async function handler(req, res) {
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
 
-const EXTRACTION_PROMPT = `Eres un asistente médico especializado en documentos clínicos de Colombia. Extrae la información del paciente de esta imagen de historia clínica u otro documento médico colombiano.
-
-Responde ÚNICAMENTE con un objeto JSON con esta estructura exacta (usa null si el dato no aparece en el documento):
-{
-  "nombre": "nombre completo del paciente tal como aparece en el documento",
-  "id": "número de cédula o documento de identidad (solo dígitos, sin espacios ni puntos ni comas)",
-  "edad": "edad del paciente en años (solo el número, sin la palabra 'años')",
-  "telefono": "número de teléfono o celular del paciente",
-  "direccion": "dirección de residencia completa del paciente",
-  "email": "correo electrónico del paciente",
-  "confidence": {
-    "nombre": 0.95,
-    "id": 0.80,
-    "edad": 0.90,
-    "telefono": 0.70,
-    "direccion": 0.85,
-    "email": 0.60
-  }
-}
-
-Escala de confidence (0.0 a 1.0):
-- 0.9–1.0: texto claramente legible, sin ambigüedad
-- 0.7–0.8: texto mayormente legible con dudas menores
-- 0.5–0.6: texto parcialmente ilegible o inferido por contexto
-- 0.0–0.4: no encontrado o completamente ilegible
-
-Reglas:
-- Extrae exactamente lo que está escrito en el documento, sin corregir ni completar datos
-- Para "id": devuelve solo dígitos, sin puntos ni comas ni espacios
-- Para "edad": devuelve solo el número (ejemplo: "45", no "45 años")
-- Si no es una historia clínica, extrae lo que puedas de los campos disponibles
-- No inventes ni supongas datos que no estén visibles en la imagen`
-
-export default async function handler(req) {
+  if (req.method === 'OPTIONS') return res.status(200).end();
   if (req.method !== 'POST') {
-    return new Response(JSON.stringify({ message: 'Method not allowed' }), { status: 405 })
+    return res.status(405).json({ error: 'Method not allowed' });
   }
-
-  let body
-  try {
-    body = await req.json()
-  } catch {
-    return new Response(JSON.stringify({ message: 'Invalid JSON' }), { status: 400 })
-  }
-
-  const { image, mediaType } = body
-  if (!image) {
-    return new Response(JSON.stringify({ message: 'Missing image field' }), { status: 400 })
-  }
-
-  // Strip data URL prefix generically — works for images and PDFs
-  const base64Data = image.replace(/^data:[^;]+;base64,/, '')
-  const effectiveMediaType = mediaType || (image.startsWith('data:image/png') ? 'image/png' : 'image/jpeg')
-  const isPdf = effectiveMediaType === 'application/pdf'
-
-  // PDFs use the document block type; images use the image block type
-  const mediaBlock = isPdf
-    ? { type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: base64Data } }
-    : { type: 'image',    source: { type: 'base64', media_type: effectiveMediaType, data: base64Data } }
 
   try {
-    const message = await client.messages.create({
+    const { image, mediaType } = req.body;
+
+    if (!image) {
+      return res.status(400).json({ error: 'No image provided' });
+    }
+
+    const isPDF = mediaType === 'application/pdf';
+
+    const { default: Anthropic } = await import('@anthropic-ai/sdk');
+    const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+
+    const contentBlock = isPDF
+      ? {
+          type: 'document',
+          source: {
+            type: 'base64',
+            media_type: 'application/pdf',
+            data: image,
+          },
+        }
+      : {
+          type: 'image',
+          source: {
+            type: 'base64',
+            media_type: mediaType || 'image/jpeg',
+            data: image,
+          },
+        };
+
+    const response = await client.messages.create({
       model: 'claude-haiku-4-5-20251001',
       max_tokens: 300,
       messages: [
         {
           role: 'user',
           content: [
-            mediaBlock,
-            { type: 'text', text: EXTRACTION_PROMPT },
+            contentBlock,
+            {
+              type: 'text',
+              text: `Extrae los datos de identificación del paciente de este formulario médico colombiano.
+Devuelve ÚNICAMENTE un objeto JSON con exactamente estos campos:
+{
+  "nombre": "nombre completo del paciente",
+  "id": "número de cédula o documento",
+  "edad": "edad en años como número",
+  "telefono": "número de teléfono",
+  "direccion": "dirección completa",
+  "email": "correo electrónico (puede estar escrito a mano en la parte superior)",
+  "confidence": {
+    "nombre": 0.95,
+    "id": 0.95,
+    "edad": 0.95,
+    "telefono": 0.95,
+    "direccion": 0.95,
+    "email": 0.7
+  }
+}
+Usa valores de confianza entre 0 y 1. Confianza baja (menos de 0.8) para campos manuscritos o poco claros.
+Usa null para campos no encontrados. Devuelve SOLO el JSON, sin texto adicional.`,
+            },
           ],
         },
       ],
-    })
+    });
 
-    const text = message.content[0]?.text ?? ''
-    const jsonMatch = text.match(/\{[\s\S]*\}/)
-    if (!jsonMatch) {
-      return new Response(JSON.stringify({ message: 'No se pudo extraer datos de la imagen' }), { status: 422 })
-    }
-
-    const patient = JSON.parse(jsonMatch[0])
-    return new Response(JSON.stringify(patient), {
-      status: 200,
-      headers: { 'Content-Type': 'application/json' },
-    })
+    const text = response.content[0].text.trim();
+    const clean = text.replace(/```json|```/g, '').trim();
+    const data = JSON.parse(clean);
+    return res.status(200).json(data);
   } catch (err) {
-    console.error('Claude API error:', err)
-    return new Response(JSON.stringify({ message: 'Error al procesar la imagen' }), { status: 500 })
+    console.error('Extract error:', err.message, err.stack);
+    return res.status(500).json({
+      error: 'Extraction failed',
+      detail: err.message
+    });
   }
 }
