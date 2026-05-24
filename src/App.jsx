@@ -5,8 +5,11 @@ import Review from './screens/Review'
 import Export from './screens/Export'
 import Setup from './screens/Setup'
 import Success from './screens/Success'
+import NuevaFecha from './screens/NuevaFecha'
+import Registry from './screens/Registry'
+import PatientEdit from './screens/PatientEdit'
 import { hasWorkbook } from './lib/indexedDB.js'
-import { appendPatient as dbAppendPatient, downloadWorkbook } from './lib/xlsx.js'
+import { appendPatient as dbAppendPatient, downloadWorkbook, updatePatient } from './lib/xlsx.js'
 
 export class AppErrorBoundary extends Component {
   constructor(props) {
@@ -65,25 +68,31 @@ export class AppErrorBoundary extends Component {
 }
 
 const SCREENS = {
-  LOADING:     'LOADING',
-  SETUP:       'SETUP',
-  DATE_PICKER: 'DATE_PICKER',
-  CAMERA:      'CAMERA',
-  REVIEW:      'REVIEW',
-  SUCCESS:     'SUCCESS',
-  EXPORT:      'EXPORT',
+  LOADING:      'LOADING',
+  SETUP:        'SETUP',
+  DATE_PICKER:  'DATE_PICKER',
+  CAMERA:       'CAMERA',
+  REVIEW:       'REVIEW',
+  SUCCESS:      'SUCCESS',
+  EXPORT:       'EXPORT',
+  NUEVA_FECHA:  'NUEVA_FECHA',
+  REGISTRY:     'REGISTRY',
+  PATIENT_EDIT: 'PATIENT_EDIT',
 }
 
 export default function App() {
-  const [screen, setScreen] = useState(SCREENS.LOADING)
-  const [session, setSession] = useState({
+  const [screen, setScreen]         = useState(SCREENS.LOADING)
+  const [cameraBack, setCameraBack] = useState(SCREENS.DATE_PICKER)
+  const [editingPatient, setEditingPatient]     = useState(null)
+  const [registryRefreshKey, setRegistryRefreshKey] = useState(0)
+  const [exporting, setExporting]   = useState(false)
+  const [session, setSession]       = useState({
     date: null,
     patients: [],
     currentPatient: null,
     currentImage: null,
     lastAdded: null,
   })
-  const [exporting, setExporting] = useState(false)
 
   useEffect(() => {
     hasWorkbook().then((exists) => {
@@ -93,20 +102,29 @@ export default function App() {
     })
   }, [])
 
+  // ── Setup ──────────────────────────────────────────────────────────────────
   function handleSetupReady() {
     setScreen(SCREENS.DATE_PICKER)
   }
 
+  // ── DatePicker ─────────────────────────────────────────────────────────────
   function handleDateSelected(date) {
     setSession((s) => ({ ...s, date }))
+    setCameraBack(SCREENS.DATE_PICKER)
     setScreen(SCREENS.CAMERA)
   }
 
+  function handleOpenRegistry() {
+    setScreen(SCREENS.REGISTRY)
+  }
+
+  // ── Camera ─────────────────────────────────────────────────────────────────
   function handleReview(patient, image) {
     setSession((s) => ({ ...s, currentPatient: patient, currentImage: image }))
     setScreen(SCREENS.REVIEW)
   }
 
+  // ── Review → confirm ───────────────────────────────────────────────────────
   async function handleConfirm(editedPatient) {
     await dbAppendPatient(editedPatient, session.date)
     setSession((s) => ({
@@ -119,8 +137,9 @@ export default function App() {
     setScreen(SCREENS.SUCCESS)
   }
 
+  // ── Success ────────────────────────────────────────────────────────────────
   function handleAddAnother() {
-    setScreen(SCREENS.CAMERA)
+    setScreen(SCREENS.NUEVA_FECHA)
   }
 
   async function handleExportDownload() {
@@ -137,10 +156,47 @@ export default function App() {
     setScreen(SCREENS.DATE_PICKER)
   }
 
+  // ── NuevaFecha ─────────────────────────────────────────────────────────────
+  function handleNuevaFechaSameDate() {
+    setCameraBack(SCREENS.NUEVA_FECHA)
+    setScreen(SCREENS.CAMERA)
+  }
+
+  function handleNuevaFechaChangeDate(newDate) {
+    setSession((s) => ({ ...s, date: newDate }))
+    setCameraBack(SCREENS.NUEVA_FECHA)
+    setScreen(SCREENS.CAMERA)
+  }
+
+  // ── Export (legacy screen) ─────────────────────────────────────────────────
   function handleExport() {
     setScreen(SCREENS.EXPORT)
   }
 
+  // ── Registry ───────────────────────────────────────────────────────────────
+  function handleEditPatient(patient) {
+    setEditingPatient(patient)
+    setScreen(SCREENS.PATIENT_EDIT)
+  }
+
+  async function handleExportFromRegistry() {
+    setExporting(true)
+    try {
+      const today = new Date().toISOString().split('T')[0]
+      await downloadWorkbook(session.date || today)
+    } finally {
+      setExporting(false)
+    }
+  }
+
+  // ── PatientEdit ────────────────────────────────────────────────────────────
+  async function handleSavePatient(rowIndex, fields) {
+    await updatePatient(rowIndex, fields)
+    setRegistryRefreshKey((k) => k + 1)
+    setScreen(SCREENS.REGISTRY)
+  }
+
+  // ── Render ─────────────────────────────────────────────────────────────────
   switch (screen) {
     case SCREENS.LOADING:
       return (
@@ -167,13 +223,18 @@ export default function App() {
       return <Setup onReady={handleSetupReady} />
 
     case SCREENS.DATE_PICKER:
-      return <DatePicker onContinue={handleDateSelected} />
+      return (
+        <DatePicker
+          onContinue={handleDateSelected}
+          onRegistry={handleOpenRegistry}
+        />
+      )
 
     case SCREENS.CAMERA:
       return (
         <Camera
           date={session.date}
-          onBack={() => setScreen(SCREENS.DATE_PICKER)}
+          onBack={() => setScreen(cameraBack)}
           onReview={handleReview}
         />
       )
@@ -201,6 +262,36 @@ export default function App() {
         />
       )
 
+    case SCREENS.NUEVA_FECHA:
+      return (
+        <NuevaFecha
+          date={session.date}
+          onSameDate={handleNuevaFechaSameDate}
+          onChangeDate={handleNuevaFechaChangeDate}
+          onBack={() => setScreen(SCREENS.SUCCESS)}
+        />
+      )
+
+    case SCREENS.REGISTRY:
+      return (
+        <Registry
+          key={registryRefreshKey}
+          onBack={() => setScreen(SCREENS.DATE_PICKER)}
+          onEditPatient={handleEditPatient}
+          onExport={handleExportFromRegistry}
+          exporting={exporting}
+        />
+      )
+
+    case SCREENS.PATIENT_EDIT:
+      return (
+        <PatientEdit
+          patient={editingPatient}
+          onBack={() => setScreen(SCREENS.REGISTRY)}
+          onSave={handleSavePatient}
+        />
+      )
+
     case SCREENS.EXPORT:
       return (
         <Export
@@ -212,6 +303,6 @@ export default function App() {
       )
 
     default:
-      return <DatePicker onContinue={handleDateSelected} />
+      return <DatePicker onContinue={handleDateSelected} onRegistry={handleOpenRegistry} />
   }
 }

@@ -1,6 +1,6 @@
 import { useState } from 'react'
 
-export default function DatePicker({ onContinue }) {
+export default function DatePicker({ onContinue, onRegistry }) {
   const [date, setDate] = useState('')
 
   function handleSubmit(e) {
@@ -127,6 +127,32 @@ export default function DatePicker({ onContinue }) {
           >
             Continuar
           </button>
+
+          {/* Secondary — view existing registry */}
+          {onRegistry && (
+            <button
+              type="button"
+              onClick={onRegistry}
+              style={{
+                fontFamily: 'Outfit, sans-serif',
+                fontSize: '15px',
+                fontWeight: 500,
+                color: 'rgba(255,255,255,0.55)',
+                background: 'none',
+                border: 'none',
+                cursor: 'pointer',
+                textAlign: 'center',
+                padding: '10px 0',
+                touchAction: 'manipulation',
+                transition: 'color 150ms ease',
+                letterSpacing: '0.01em',
+              }}
+              onMouseEnter={(e) => { e.currentTarget.style.color = 'rgba(255,255,255,0.85)' }}
+              onMouseLeave={(e) => { e.currentTarget.style.color = 'rgba(255,255,255,0.55)' }}
+            >
+              Ver registro actual →
+            </button>
+          )}
         </form>
       </div>
 

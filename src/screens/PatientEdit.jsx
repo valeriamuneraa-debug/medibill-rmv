@@ -1,0 +1,238 @@
+import { useState } from 'react'
+
+const FIELDS = [
+  { key: 'procedimiento', label: 'Procedimiento',    inputMode: 'text',    hint: null },
+  { key: 'presupuesto',   label: 'Presupuesto',       inputMode: 'decimal', hint: 'Valor en pesos' },
+  { key: 'clinica',       label: 'Clínica',            inputMode: 'text',    hint: null },
+  { key: 'implantes',     label: 'Implantes',          inputMode: 'text',    hint: 'Ej: 325 300' },
+  { key: 'instrum',       label: 'Instrumentación',    inputMode: 'decimal', hint: 'Valor en pesos' },
+  { key: 'tiempo',        label: 'Tiempo (minutos)',   inputMode: 'numeric', hint: null },
+  { key: 'facturaDian',   label: 'Factura Dian',       inputMode: 'decimal', hint: 'Valor en pesos' },
+]
+
+export default function PatientEdit({ patient, onBack, onSave }) {
+  const [form, setForm] = useState({
+    procedimiento: String(patient?.procedimiento ?? ''),
+    presupuesto:   patient?.presupuesto  != null ? String(patient.presupuesto)  : '',
+    clinica:       String(patient?.clinica       ?? ''),
+    implantes:     String(patient?.implantes     ?? ''),
+    instrum:       patient?.instrum      != null ? String(patient.instrum)      : '',
+    tiempo:        patient?.tiempo       != null ? String(patient.tiempo)       : '',
+    facturaDian:   patient?.facturaDian  != null ? String(patient.facturaDian)  : '',
+  })
+  const [focusedField, setFocusedField] = useState(null)
+  const [saving, setSaving] = useState(false)
+
+  function update(key, value) {
+    setForm(prev => ({ ...prev, [key]: value }))
+  }
+
+  async function handleSave() {
+    if (saving) return
+    setSaving(true)
+    try {
+      await onSave(patient._row, { ...form })
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const inputStyle = (key) => ({
+    fontFamily: 'Outfit, sans-serif',
+    fontSize: '16px',
+    fontWeight: 400,
+    color: '#ffffff',
+    background: 'rgba(255,255,255,0.07)',
+    border: `1.5px solid ${focusedField === key ? 'rgba(255,255,255,0.55)' : 'rgba(255,255,255,0.18)'}`,
+    borderRadius: '12px',
+    padding: '14px 16px',
+    minHeight: '52px',
+    width: '100%',
+    boxSizing: 'border-box',
+    outline: 'none',
+    transition: 'border-color 150ms ease',
+    touchAction: 'manipulation',
+  })
+
+  return (
+    <div
+      className="min-h-dvh flex flex-col"
+      style={{ background: '#172137', fontFamily: 'Outfit, sans-serif', color: '#ffffff' }}
+    >
+      {/* Header */}
+      <header style={{ display: 'flex', alignItems: 'center', padding: '16px 20px 12px', flexShrink: 0 }}>
+        <button
+          onClick={onBack}
+          aria-label="Volver al registro"
+          style={{
+            fontFamily: 'Outfit, sans-serif',
+            fontSize: '22px',
+            color: '#ffffff',
+            background: 'none',
+            border: 'none',
+            cursor: 'pointer',
+            width: '44px',
+            minHeight: '64px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'flex-start',
+            padding: 0,
+            opacity: 0.8,
+            flexShrink: 0,
+            touchAction: 'manipulation',
+            transition: 'opacity 150ms ease, transform 100ms ease',
+          }}
+          onMouseEnter={(e) => { e.currentTarget.style.opacity = '1' }}
+          onMouseLeave={(e) => { e.currentTarget.style.opacity = '0.8'; e.currentTarget.style.transform = 'scale(1)' }}
+          onMouseDown={(e) => { e.currentTarget.style.transform = 'scale(0.9)' }}
+          onMouseUp={(e) => { e.currentTarget.style.transform = 'scale(1)' }}
+          onTouchStart={(e) => { e.currentTarget.style.transform = 'scale(0.9)' }}
+          onTouchEnd={(e) => { e.currentTarget.style.transform = 'scale(1)' }}
+        >
+          ←
+        </button>
+
+        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '5px' }}>
+          <span
+            style={{
+              fontSize: 'clamp(26px, 8vw, 38px)',
+              fontWeight: 700,
+              letterSpacing: '0.22em',
+              lineHeight: 1,
+              userSelect: 'none',
+            }}
+            aria-label="Iniciales: R M V"
+          >
+            RMV
+          </span>
+          <span style={{
+            fontSize: '12px',
+            fontWeight: 400,
+            letterSpacing: '0.04em',
+            color: 'rgba(255,255,255,0.45)',
+            textAlign: 'center',
+            maxWidth: '200px',
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            whiteSpace: 'nowrap',
+          }}>
+            {patient?.nombre || 'Paciente'}
+          </span>
+        </div>
+
+        <div style={{ width: '44px', flexShrink: 0 }} aria-hidden="true" />
+      </header>
+
+      {/* Scrollable form */}
+      <main style={{ flex: 1, overflowY: 'auto', padding: '8px 24px 48px', WebkitOverflowScrolling: 'touch' }}>
+        <div style={{ maxWidth: '420px', margin: '0 auto', display: 'flex', flexDirection: 'column', gap: '24px' }}>
+
+          <h2 style={{
+            fontSize: '18px',
+            fontWeight: 600,
+            margin: 0,
+            letterSpacing: '0.01em',
+            color: 'rgba(255,255,255,0.8)',
+          }}>
+            Datos del procedimiento
+          </h2>
+
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+            {FIELDS.map(({ key, label, inputMode, hint }) => (
+              <div key={key} style={{ display: 'flex', flexDirection: 'column', gap: '5px' }}>
+                <label
+                  htmlFor={`edit-${key}`}
+                  style={{
+                    fontSize: '13px',
+                    fontWeight: 500,
+                    color: 'rgba(255,255,255,0.52)',
+                    letterSpacing: '0.03em',
+                  }}
+                >
+                  {label}
+                </label>
+                <input
+                  id={`edit-${key}`}
+                  type="text"
+                  inputMode={inputMode}
+                  value={form[key]}
+                  onChange={(e) => update(key, e.target.value)}
+                  onFocus={() => setFocusedField(key)}
+                  onBlur={() => setFocusedField(null)}
+                  autoComplete="off"
+                  placeholder=""
+                  style={inputStyle(key)}
+                />
+                {hint && (
+                  <span style={{
+                    fontSize: '12px',
+                    color: 'rgba(255,255,255,0.3)',
+                    fontWeight: 400,
+                    lineHeight: 1.4,
+                  }}>
+                    {hint}
+                  </span>
+                )}
+              </div>
+            ))}
+          </div>
+
+          {/* Save button */}
+          <button
+            onClick={handleSave}
+            disabled={saving}
+            aria-disabled={saving}
+            aria-busy={saving}
+            style={{
+              fontFamily: 'Outfit, sans-serif',
+              fontSize: '18px',
+              fontWeight: 600,
+              color: saving ? 'rgba(23,33,55,0.45)' : '#172137',
+              background: saving ? 'rgba(255,255,255,0.22)' : '#ffffff',
+              border: 'none',
+              borderRadius: '12px',
+              padding: '20px',
+              width: '100%',
+              minHeight: '64px',
+              cursor: saving ? 'default' : 'pointer',
+              touchAction: 'manipulation',
+              transition: 'background 200ms ease, color 200ms ease, transform 100ms ease',
+              letterSpacing: '0.02em',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '10px',
+              marginTop: '8px',
+            }}
+            onMouseDown={(e) => { if (!saving) e.currentTarget.style.transform = 'scale(0.98)' }}
+            onMouseUp={(e) => { e.currentTarget.style.transform = 'scale(1)' }}
+            onMouseLeave={(e) => { e.currentTarget.style.transform = 'scale(1)' }}
+            onTouchStart={(e) => { if (!saving) e.currentTarget.style.transform = 'scale(0.98)' }}
+            onTouchEnd={(e) => { e.currentTarget.style.transform = 'scale(1)' }}
+          >
+            {saving ? (
+              <>
+                <div
+                  className="animate-spin"
+                  style={{
+                    width: '18px',
+                    height: '18px',
+                    border: '2px solid rgba(23,33,55,0.2)',
+                    borderTopColor: 'rgba(23,33,55,0.6)',
+                    borderRadius: '50%',
+                    flexShrink: 0,
+                  }}
+                  aria-hidden="true"
+                />
+                Guardando...
+              </>
+            ) : (
+              'Guardar cambios'
+            )}
+          </button>
+
+        </div>
+      </main>
+    </div>
+  )
+}

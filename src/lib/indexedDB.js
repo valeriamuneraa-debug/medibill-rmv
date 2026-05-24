@@ -53,3 +53,8 @@ export async function hasWorkbook() {
   const val = await getWorkbook()
   return val != null
 }
+
+export async function clearWorkbook() {
+  const db = await getDB()
+  return db.delete('workbooks', 'template')
+}

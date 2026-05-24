@@ -12,16 +12,16 @@ const COL = {
   TELEFONO:      4,  // E — string (preserve leading zeros)
   DIRECCION:     5,  // F
   EMAIL:         6,  // G
-  PROCEDIMIENTO: 7,  // H — empty
-  PRESUPUESTO:   8,  // I — empty
-  CLINICA:       9,  // J — empty
-  IMPLANTES:    10,  // K — empty
-  INSTRUM:      11,  // L — empty
-  TIEMPO:       12,  // M — empty
-  FACTURA_DIAN: 13,  // N — empty (filled manually in Excel later)
-  PROFIT:       14,  // O — empty
-  PROFIT_DIA:   15,  // P — empty
-  PROFIT_MES:   16,  // Q — empty
+  PROCEDIMIENTO: 7,  // H
+  PRESUPUESTO:   8,  // I
+  CLINICA:       9,  // J
+  IMPLANTES:    10,  // K
+  INSTRUM:      11,  // L
+  TIEMPO:       12,  // M
+  FACTURA_DIAN: 13,  // N — filled manually in Excel
+  PROFIT:       14,  // O
+  PROFIT_DIA:   15,  // P
+  PROFIT_MES:   16,  // Q
   TIPO_DOC:     17,  // R
   GENERO:       18,  // S
 }
@@ -36,8 +36,6 @@ function dateSerial(isoDate) {
   return Math.floor(new Date(Date.UTC(y, m - 1, d)).getTime() / 86400000) + 25569
 }
 
-// Scan column A downward to find the row after the last non-empty Nombre cell.
-// This is safer than using range.e.r which may include formatted-but-empty rows.
 function findAppendRow(ws) {
   if (!ws['!ref']) return 1
   const range = XLSX.utils.decode_range(ws['!ref'])
@@ -69,67 +67,36 @@ function expandRef(ws, row) {
   ws['!ref'] = XLSX.utils.encode_range(range)
 }
 
-// Regenerate Resumen sheet: 3 columns, 12 fixed rows (Enero–Diciembre 2026).
-// Writes SUMIFS/COUNTIFS formulas plus cached JS-computed values so the sheet
-// is immediately readable and auto-updates when Factura Dian is filled manually.
+// Resumen sheet: bold headers, SUMPRODUCT formulas for each month, TOTAL row.
+// No pre-computation — Excel evaluates formulas on open, so this always reflects
+// whatever the user fills into Factura Dian (col N) directly in the spreadsheet.
 function buildResumen(wb) {
-  const dataSheet = wb.Sheets[SHEET_NAME]
-
-  // Pre-compute cached values from current workbook data
-  const totals = new Array(12).fill(0)
-  const counts = new Array(12).fill(0)
-
-  if (dataSheet && dataSheet['!ref']) {
-    const range = XLSX.utils.decode_range(dataSheet['!ref'])
-    for (let r = 1; r <= range.e.r; r++) {
-      const nombreCell = dataSheet[XLSX.utils.encode_cell({ r, c: COL.NOMBRE })]
-      const dateCell   = dataSheet[XLSX.utils.encode_cell({ r, c: COL.FECHA })]
-      if (!nombreCell || !String(nombreCell.v ?? '').trim()) continue
-      if (!dateCell   || dateCell.v == null) continue
-
-      const jsDate = new Date(Math.round((Number(dateCell.v) - 25569) * 86400000))
-      if (jsDate.getUTCFullYear() !== 2026) continue
-
-      const mi = jsDate.getUTCMonth()
-      counts[mi]++
-      const facturaCell = dataSheet[XLSX.utils.encode_cell({ r, c: COL.FACTURA_DIAN })]
-      if (facturaCell && typeof facturaCell.v === 'number') totals[mi] += facturaCell.v
-    }
-  }
-
   const ws = {}
+  const bold = { font: { bold: true } }
 
-  // Header row (row 1)
-  ws['A1'] = { v: 'Mes',                  t: 's' }
-  ws['B1'] = { v: 'Total Factura Dian',   t: 's' }
-  ws['C1'] = { v: 'Número de pacientes',  t: 's' }
+  ws['A1'] = { v: 'Mes',               t: 's', s: bold }
+  ws['B1'] = { v: 'Total Factura Dian', t: 's', s: bold }
+  ws['C1'] = { v: 'Pacientes',          t: 's', s: bold }
 
-  // One row per month (rows 2–13)
   for (let m = 1; m <= 12; m++) {
-    const row     = m + 1
-    const nextM   = m === 12 ? 1  : m + 1
-    const nextY   = m === 12 ? 2027 : 2026
-    const mi      = m - 1
-
-    ws[`A${row}`] = { v: MONTH_NAMES[mi], t: 's' }
-
-    // SUMIFS: sum Factura Dian (col N) where Fecha (col B) falls in this month of 2026
+    const row = m + 1
+    ws[`A${row}`] = { v: MONTH_NAMES[m - 1], t: 's' }
     ws[`B${row}`] = {
-      v: totals[mi],
-      t: 'n',
-      f: `SUMIFS('Hoja 1'!$N$2:$N$5000,'Hoja 1'!$B$2:$B$5000,">="&DATE(2026,${m},1),'Hoja 1'!$B$2:$B$5000,"<"&DATE(${nextY},${nextM},1))`,
+      v: 0, t: 'n',
+      f: `SUMPRODUCT((MONTH('Hoja 1'!$B$2:$B$1011)=${m})*(YEAR('Hoja 1'!$B$2:$B$1011)=2026)*('Hoja 1'!$N$2:$N$1011))`,
       z: '"$"#,##0',
     }
-
-    // COUNTIFS: count rows where Fecha is in month AND Nombre is non-empty
     ws[`C${row}`] = {
-      v: counts[mi],
-      t: 'n',
-      f: `COUNTIFS('Hoja 1'!$B$2:$B$5000,">="&DATE(2026,${m},1),'Hoja 1'!$B$2:$B$5000,"<"&DATE(${nextY},${nextM},1),'Hoja 1'!$A$2:$A$5000,"<>")`,
+      v: 0, t: 'n',
+      f: `SUMPRODUCT((MONTH('Hoja 1'!$B$2:$B$1011)=${m})*(YEAR('Hoja 1'!$B$2:$B$1011)=2026)*('Hoja 1'!$A$2:$A$1011<>""))`,
     }
   }
 
-  ws['!ref'] = 'A1:C13'
+  ws['A14'] = { v: 'TOTAL 2026', t: 's', s: bold }
+  ws['B14'] = { v: 0, t: 'n', f: 'SUM(B2:B13)', z: '"$"#,##0', s: bold }
+  ws['C14'] = { v: 0, t: 'n', f: 'SUM(C2:C13)', s: bold }
+
+  ws['!ref'] = 'A1:C14'
 
   if (wb.SheetNames.includes(RESUMEN_SHEET)) {
     wb.Sheets[RESUMEN_SHEET] = ws
@@ -171,25 +138,18 @@ export async function appendPatient(patient, dateStr) {
   const ws  = wb.Sheets[SHEET_NAME]
   const row = findAppendRow(ws)
 
-  setCell(ws, row, COL.NOMBRE,        patient.nombre   ?? '',                  's')
-  setCell(ws, row, COL.FECHA,         dateSerial(dateStr),                     'n', 'dd/mm/yyyy')
-  setCell(ws, row, COL.ID,            parseInt(patient.id,    10) || 0,        'n')
-  setCell(ws, row, COL.EDAD,          parseInt(patient.edad,  10) || 0,        'n')
-  setCell(ws, row, COL.TELEFONO,      String(patient.telefono ?? ''),           's')
-  setCell(ws, row, COL.DIRECCION,     patient.direccion ?? '',                  's')
-  setCell(ws, row, COL.EMAIL,         patient.email     ?? '',                  's')
-  setCell(ws, row, COL.PROCEDIMIENTO, '',                                        's')
-  setCell(ws, row, COL.PRESUPUESTO,   '',                                        's')
-  setCell(ws, row, COL.CLINICA,       '',                                        's')
-  setCell(ws, row, COL.IMPLANTES,     '',                                        's')
-  setCell(ws, row, COL.INSTRUM,       '',                                        's')
-  setCell(ws, row, COL.TIEMPO,        '',                                        's')
-  setCell(ws, row, COL.FACTURA_DIAN,  '',                                        's')
-  setCell(ws, row, COL.PROFIT,        '',                                        's')
-  setCell(ws, row, COL.PROFIT_DIA,    '',                                        's')
-  setCell(ws, row, COL.PROFIT_MES,    '',                                        's')
-  setCell(ws, row, COL.TIPO_DOC,      'Cédula de ciudadanía',                   's')
-  setCell(ws, row, COL.GENERO,        'Femenino',                                's')
+  // Patient identity fields — always populated
+  setCell(ws, row, COL.NOMBRE,    patient.nombre    ?? '',              's')
+  setCell(ws, row, COL.FECHA,     dateSerial(dateStr),                  'n', 'dd/mm/yyyy')
+  setCell(ws, row, COL.ID,        parseInt(patient.id,   10) || 0,      'n')
+  setCell(ws, row, COL.EDAD,      parseInt(patient.edad, 10) || 0,      'n')
+  setCell(ws, row, COL.TELEFONO,  String(patient.telefono  ?? ''),      's')
+  setCell(ws, row, COL.DIRECCION, patient.direccion ?? '',              's')
+  setCell(ws, row, COL.EMAIL,     patient.email     ?? '',              's')
+  setCell(ws, row, COL.TIPO_DOC,  'Cédula de ciudadanía',               's')
+  setCell(ws, row, COL.GENERO,    'Femenino',                           's')
+  // Billing columns left truly empty so SUMPRODUCT formulas in Resumen
+  // treat them as 0 (not as error-causing empty strings).
 
   expandRef(ws, row)
   buildResumen(wb)
@@ -202,6 +162,76 @@ export async function downloadWorkbook(dateStr) {
   if (!b64) throw new Error('No hay plantilla guardada')
 
   const wb = XLSX.read(b64, { type: 'base64' })
-  const [y, m, d] = dateStr.split('-')
+  buildResumen(wb)  // Always regenerate before export
+
+  const effectiveDate = dateStr || new Date().toISOString().split('T')[0]
+  const [y, m, d] = effectiveDate.split('-')
   XLSX.writeFile(wb, `Pacientes_2026_${d}-${m}-${y}.xlsx`)
+}
+
+export async function readPatients() {
+  const b64 = await getWorkbook()
+  if (!b64) return []
+
+  const wb = XLSX.read(b64, { type: 'base64' })
+  const ws = wb.Sheets[SHEET_NAME]
+  if (!ws || !ws['!ref']) return []
+
+  const range = XLSX.utils.decode_range(ws['!ref'])
+  const patients = []
+
+  for (let r = 1; r <= range.e.r; r++) {
+    const nombreCell = ws[XLSX.utils.encode_cell({ r, c: COL.NOMBRE })]
+    if (!nombreCell || !String(nombreCell.v ?? '').trim()) continue
+
+    const get = (col) => {
+      const cell = ws[XLSX.utils.encode_cell({ r, c: col })]
+      return cell != null ? cell.v : null
+    }
+
+    patients.push({
+      _row:          r,
+      nombre:        String(get(COL.NOMBRE)        ?? ''),
+      fecha:         get(COL.FECHA),
+      procedimiento: String(get(COL.PROCEDIMIENTO) ?? ''),
+      presupuesto:   get(COL.PRESUPUESTO),
+      clinica:       String(get(COL.CLINICA)        ?? ''),
+      implantes:     String(get(COL.IMPLANTES)      ?? ''),
+      instrum:       get(COL.INSTRUM),
+      tiempo:        get(COL.TIEMPO),
+      facturaDian:   get(COL.FACTURA_DIAN),
+    })
+  }
+
+  return patients
+}
+
+export async function updatePatient(rowIndex, fields) {
+  const b64 = await getWorkbook()
+  if (!b64) throw new Error('No hay plantilla guardada')
+
+  const wb = XLSX.read(b64, { type: 'base64' })
+  const ws = wb.Sheets[SHEET_NAME]
+  if (!ws) throw new Error(`Hoja "${SHEET_NAME}" no encontrada`)
+
+  const save = (col, val, isNumeric, fmt) => {
+    if (val === undefined) return
+    if (isNumeric && val !== '') {
+      const n = Number(val)
+      if (!isNaN(n)) setCell(ws, rowIndex, col, n, 'n', fmt)
+    } else {
+      setCell(ws, rowIndex, col, String(val), 's')
+    }
+  }
+
+  save(COL.PROCEDIMIENTO, fields.procedimiento, false)
+  save(COL.PRESUPUESTO,   fields.presupuesto,   true,  '"$"#,##0')
+  save(COL.CLINICA,       fields.clinica,        false)
+  save(COL.IMPLANTES,     fields.implantes,      false)
+  save(COL.INSTRUM,       fields.instrum,        true)
+  save(COL.TIEMPO,        fields.tiempo,         true)
+  save(COL.FACTURA_DIAN,  fields.facturaDian,    true,  '"$"#,##0')
+
+  buildResumen(wb)
+  await setWorkbook(XLSX.write(wb, { type: 'base64', bookType: 'xlsx' }))
 }
