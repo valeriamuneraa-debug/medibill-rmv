@@ -10,6 +10,35 @@ function formatDate(isoDate) {
   return `${day} de ${months[month - 1]} de ${year}`
 }
 
+// ── Image compression — max 1200px longest side, JPEG 0.7 ──────────────────
+
+const compress = (file) => new Promise(resolve => {
+  const img = new Image()
+  const url = URL.createObjectURL(file)
+  img.onload = () => {
+    URL.revokeObjectURL(url)
+    const canvas = document.createElement('canvas')
+    const ratio = Math.min(1200 / img.width, 1200 / img.height, 1)
+    canvas.width  = img.width  * ratio
+    canvas.height = img.height * ratio
+    canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height)
+    canvas.toBlob(blob => {
+      const reader = new FileReader()
+      reader.onload = e => resolve(e.target.result.split(',')[1])
+      reader.readAsDataURL(blob)
+    }, 'image/jpeg', 0.7)
+  }
+  img.src = url
+})
+
+// ── Loading progress messages ────────────────────────────────────────────────
+
+const LOADING_MSGS = [
+  'Leyendo nombre...',
+  'Leyendo documento...',
+  'Leyendo contacto...',
+]
+
 // ── Icons — consistent 1.8px stroke throughout ──────────────────────────────
 
 function CameraIcon({ color }) {
@@ -53,6 +82,7 @@ export default function Camera({ date, onBack, onReview }) {
   const [mediaType, setMediaType] = useState(null)  // MIME type of selected file
   const [stream, setStream] = useState(null)
   const [loading, setLoading] = useState(false)
+  const [loadingStep, setLoadingStep] = useState(0)
   const [error, setError] = useState(null)
 
   const cameraInputRef = useRef(null)
@@ -74,15 +104,29 @@ export default function Camera({ date, onBack, onReview }) {
     return () => { stream?.getTracks().forEach(t => t.stop()) }
   }, [stream])
 
-  function handleFileChange(e) {
+  // Cycle loading messages every 1.5s while extraction is running
+  useEffect(() => {
+    if (!loading) { setLoadingStep(0); return }
+    const id = setInterval(() => setLoadingStep(s => (s + 1) % LOADING_MSGS.length), 1500)
+    return () => clearInterval(id)
+  }, [loading])
+
+  async function handleFileChange(e) {
     const file = e.target.files?.[0]
     if (!file) return
-    setMediaType(file.type)
+    e.target.value = ''
     setError(null)
-    const reader = new FileReader()
-    reader.onload = (ev) => setImage(ev.target.result)
-    reader.readAsDataURL(file)
-    e.target.value = '' // allow re-selecting the same file
+    if (file.type === 'application/pdf') {
+      setMediaType('application/pdf')
+      const reader = new FileReader()
+      reader.onload = (ev) => setImage(ev.target.result)
+      reader.readAsDataURL(file)
+    } else {
+      // Compress to max 1200px / JPEG 0.7 before storing for preview and API
+      setMediaType('image/jpeg')
+      const b64 = await compress(file)
+      setImage('data:image/jpeg;base64,' + b64)
+    }
   }
 
   async function handleCameraClick() {
@@ -104,10 +148,11 @@ export default function Camera({ date, onBack, onReview }) {
     const video = videoRef.current
     const canvas = canvasRef.current
     if (!video || !canvas) return
-    canvas.width = video.videoWidth
-    canvas.height = video.videoHeight
-    canvas.getContext('2d').drawImage(video, 0, 0)
-    setImage(canvas.toDataURL('image/jpeg', 0.92))
+    const ratio = Math.min(1200 / video.videoWidth, 1200 / video.videoHeight, 1)
+    canvas.width  = video.videoWidth  * ratio
+    canvas.height = video.videoHeight * ratio
+    canvas.getContext('2d').drawImage(video, 0, 0, canvas.width, canvas.height)
+    setImage(canvas.toDataURL('image/jpeg', 0.7))
     setMediaType('image/jpeg')
     stopStream()
   }
@@ -543,7 +588,7 @@ export default function Camera({ date, onBack, onReview }) {
                     flexShrink: 0,
                   }}
                 />
-                Extrayendo datos...
+                {LOADING_MSGS[loadingStep]}
               </>
             ) : 'Extraer datos'}
           </button>
