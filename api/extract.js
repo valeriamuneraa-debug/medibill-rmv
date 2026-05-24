@@ -20,6 +20,7 @@ export default async function handler(req, res) {
 
   try {
     const { image, mediaType } = req.body;
+    console.log('REQUEST received, image length:', image?.length, 'mediaType:', mediaType);
 
     if (!image) {
       return res.status(400).json({ error: 'No image provided' });
@@ -43,7 +44,7 @@ export default async function handler(req, res) {
           type: 'image',
           source: {
             type: 'base64',
-            media_type: mediaType || 'image/jpeg',
+            media_type: 'image/jpeg',
             data: image,
           },
         };
@@ -89,7 +90,7 @@ Usa null para campos no encontrados. Devuelve SOLO el JSON, sin texto adicional.
     const data = JSON.parse(clean);
     return res.status(200).json(data);
   } catch (err) {
-    console.error('Extract error:', err.message, err.stack);
+    console.error('Anthropic error full:', JSON.stringify(err, null, 2));
     return res.status(500).json({
       error: 'Extraction failed',
       detail: err.message

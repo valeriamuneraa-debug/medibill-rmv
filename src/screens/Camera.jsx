@@ -174,10 +174,16 @@ export default function Camera({ date, onBack, onReview }) {
     setLoading(true)
     setError(null)
     try {
+      // Strip data URL prefix — API expects raw base64 bytes
+      const base64 = image.includes(',') ? image.split(',')[1] : image
+      console.log('Sending image, size:', base64.length)
       const resp = await fetch('/api/extract', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ image, mediaType }),
+        body: JSON.stringify({
+          image: base64,
+          mediaType: isPdf ? 'application/pdf' : 'image/jpeg',
+        }),
       })
       if (!resp.ok) throw new Error(`HTTP ${resp.status}`)
       const patient = await resp.json()
