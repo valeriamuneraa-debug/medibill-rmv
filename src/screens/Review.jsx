@@ -38,12 +38,12 @@ function isValidEmail(v) { return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v.trim()) }
 
 export default function Review({ date, patient, image, onBack, onConfirm }) {
   const [formData, setFormData] = useState(() => ({
-    nombre:    patient?.nombre    ?? '',
-    id:        patient?.id        ?? '',
-    edad:      patient?.edad      ?? '',
-    telefono:  patient?.telefono  ?? '',
-    direccion: patient?.direccion ?? '',
-    email:     patient?.email     ?? '',
+    nombre:    String(patient?.nombre    ?? ''),
+    id:        String(patient?.id        ?? ''),
+    edad:      String(patient?.edad      ?? ''),
+    telefono:  String(patient?.telefono  ?? ''),
+    direccion: String(patient?.direccion ?? ''),
+    email:     String(patient?.email     ?? ''),
   }))
   const [focusedField, setFocusedField] = useState(null)
   const [saving, setSaving] = useState(false)
