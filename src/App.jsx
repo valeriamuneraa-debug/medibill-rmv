@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { Component, useEffect, useState } from 'react'
 import DatePicker from './screens/DatePicker'
 import Camera from './screens/Camera'
 import Review from './screens/Review'
@@ -7,6 +7,62 @@ import Setup from './screens/Setup'
 import Success from './screens/Success'
 import { hasWorkbook } from './lib/indexedDB.js'
 import { appendPatient as dbAppendPatient, downloadWorkbook } from './lib/xlsx.js'
+
+export class AppErrorBoundary extends Component {
+  constructor(props) {
+    super(props)
+    this.state = { error: null }
+  }
+  static getDerivedStateFromError(error) {
+    return { error }
+  }
+  render() {
+    if (this.state.error) {
+      return (
+        <div
+          style={{
+            minHeight: '100dvh',
+            background: '#172137',
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            justifyContent: 'center',
+            fontFamily: 'Outfit, sans-serif',
+            color: '#ffffff',
+            padding: '32px 24px',
+            gap: '20px',
+            textAlign: 'center',
+          }}
+        >
+          <span style={{ fontSize: '32px', fontWeight: 700, letterSpacing: '0.22em' }}>RMV</span>
+          <p style={{ fontSize: '16px', color: 'rgba(255,255,255,0.6)', maxWidth: '320px' }}>
+            Algo salió mal. Recarga la página para continuar.
+          </p>
+          <p style={{ fontSize: '12px', color: 'rgba(255,255,255,0.3)', maxWidth: '320px', wordBreak: 'break-all' }}>
+            {this.state.error.message}
+          </p>
+          <button
+            onClick={() => window.location.reload()}
+            style={{
+              fontFamily: 'Outfit, sans-serif',
+              fontSize: '16px',
+              fontWeight: 600,
+              color: '#172137',
+              background: '#ffffff',
+              border: 'none',
+              borderRadius: '12px',
+              padding: '16px 32px',
+              cursor: 'pointer',
+            }}
+          >
+            Recargar
+          </button>
+        </div>
+      )
+    }
+    return this.props.children
+  }
+}
 
 const SCREENS = {
   LOADING:     'LOADING',

@@ -33,7 +33,7 @@ const MONTH_NAMES = [
 
 function dateSerial(isoDate) {
   const [y, m, d] = isoDate.split('-').map(Number)
-  return XLSX.utils.datenum(new Date(Date.UTC(y, m - 1, d)))
+  return Math.floor(new Date(Date.UTC(y, m - 1, d)).getTime() / 86400000) + 25569
 }
 
 // Scan column A downward to find the row after the last non-empty Nombre cell.
