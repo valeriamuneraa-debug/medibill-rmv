@@ -3,40 +3,49 @@ import { storeUploadedWorkbook } from '../lib/xlsx.js'
 
 function SpreadsheetIcon() {
   return (
-    <svg width="48" height="48" viewBox="0 0 48 48" fill="none" aria-hidden="true">
-      <rect x="6" y="4" width="36" height="40" rx="3" stroke="rgba(255,255,255,0.55)" strokeWidth="1.8" />
-      <path d="M14 14H34M14 22H34M14 30H26" stroke="rgba(255,255,255,0.55)" strokeWidth="1.8" strokeLinecap="round" />
-      <path d="M6 14H42" stroke="rgba(255,255,255,0.35)" strokeWidth="1.2" />
-      <path d="M18 4V44" stroke="rgba(255,255,255,0.25)" strokeWidth="1.2" />
+    <svg width="44" height="44" viewBox="0 0 44 44" fill="none" aria-hidden="true">
+      <rect x="5" y="3" width="34" height="38" rx="3" stroke="rgba(255,255,255,0.5)" strokeWidth="1.8" />
+      <path d="M13 13H31M13 21H31M13 29H24" stroke="rgba(255,255,255,0.5)" strokeWidth="1.8" strokeLinecap="round" />
+      <path d="M5 13H39" stroke="rgba(255,255,255,0.25)" strokeWidth="1.2" />
+      <path d="M17 3V41" stroke="rgba(255,255,255,0.2)" strokeWidth="1.2" />
     </svg>
   )
 }
 
 function UploadIcon() {
   return (
-    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-      <path d="M12 16V8M12 8L9 11M12 8L15 11" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
-      <path d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+    <svg width="18" height="18" viewBox="0 0 18 18" fill="none" aria-hidden="true">
+      <path d="M9 12V4M9 4L6 7M9 4L12 7" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M3 12v2a1 1 0 001 1h10a1 1 0 001-1v-2" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
     </svg>
   )
 }
 
 export default function Setup({ onReady }) {
   const inputRef = useRef(null)
+  const [selectedFile, setSelectedFile] = useState(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
-  const [dragging, setDragging] = useState(false)
 
-  async function processFile(file) {
+  function handleFileChange(e) {
+    const file = e.target.files?.[0]
+    e.target.value = ''
     if (!file) return
-    if (!file.name.endsWith('.xlsx') && !file.name.endsWith('.xls')) {
-      setError('Solo se aceptan archivos Excel (.xlsx)')
+    if (!file.name.endsWith('.xlsx')) {
+      setError('Solo se aceptan archivos .xlsx')
+      setSelectedFile(null)
       return
     }
+    setError(null)
+    setSelectedFile(file)
+  }
+
+  async function handleUpload() {
+    if (!selectedFile || loading) return
     setLoading(true)
     setError(null)
     try {
-      await storeUploadedWorkbook(file)
+      await storeUploadedWorkbook(selectedFile)
       onReady()
     } catch (err) {
       setError(err.message ?? 'Error al procesar el archivo')
@@ -44,21 +53,10 @@ export default function Setup({ onReady }) {
     }
   }
 
-  function handleFileChange(e) {
-    processFile(e.target.files?.[0])
-    e.target.value = ''
-  }
-
-  function handleDrop(e) {
-    e.preventDefault()
-    setDragging(false)
-    processFile(e.dataTransfer.files?.[0])
-  }
-
   return (
     <div
       className="min-h-dvh flex flex-col items-center justify-between"
-      style={{ background: '#172137', fontFamily: 'Outfit, sans-serif', padding: '0 24px' }}
+      style={{ background: '#172137', fontFamily: 'Outfit, sans-serif', color: '#ffffff', padding: '0 24px' }}
     >
       <div style={{ flex: '1 1 0' }} />
 
@@ -79,117 +77,165 @@ export default function Setup({ onReady }) {
           >
             RMV
           </span>
-          <span
-            style={{
-              fontSize: '13px',
-              fontWeight: 400,
-              letterSpacing: '0.18em',
-              color: 'rgba(255,255,255,0.45)',
-              textTransform: 'uppercase',
-            }}
-          >
-            Configuración inicial
+          <span style={{
+            fontSize: '13px',
+            fontWeight: 400,
+            letterSpacing: '0.18em',
+            color: 'rgba(255,255,255,0.45)',
+            textTransform: 'uppercase',
+          }}>
+            MediBill
           </span>
         </div>
 
-        {/* Instructions */}
-        <p
-          style={{
-            fontSize: 'clamp(18px, 5vw, 22px)',
-            fontWeight: 400,
-            color: '#ffffff',
-            lineHeight: 1.4,
-            textAlign: 'center',
-            margin: 0,
-          }}
-        >
-          Sube la plantilla Excel de Dr. Múnera
+        {/* Label */}
+        <p style={{
+          fontSize: 'clamp(18px, 5vw, 22px)',
+          fontWeight: 400,
+          color: '#ffffff',
+          lineHeight: 1.4,
+          textAlign: 'center',
+          margin: 0,
+        }}>
+          Carga tu archivo Pacientes_2026.xlsx para comenzar
         </p>
 
-        {/* Upload zone */}
-        <button
-          type="button"
-          onClick={() => !loading && inputRef.current?.click()}
-          onDragOver={(e) => { e.preventDefault(); setDragging(true) }}
-          onDragLeave={() => setDragging(false)}
-          onDrop={handleDrop}
-          disabled={loading}
-          aria-label="Seleccionar archivo Excel"
-          style={{
-            width: '100%',
-            minHeight: '180px',
-            background: dragging ? 'rgba(255,255,255,0.12)' : 'rgba(255,255,255,0.07)',
-            border: `2px dashed ${dragging ? 'rgba(255,255,255,0.7)' : 'rgba(255,255,255,0.3)'}`,
-            borderRadius: '16px',
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-            justifyContent: 'center',
-            gap: '16px',
-            cursor: loading ? 'default' : 'pointer',
-            transition: 'background 150ms ease, border-color 150ms ease',
-            padding: '24px',
-            touchAction: 'manipulation',
-          }}
-          onMouseEnter={(e) => { if (!loading) e.currentTarget.style.background = 'rgba(255,255,255,0.10)' }}
-          onMouseLeave={(e) => { if (!loading && !dragging) e.currentTarget.style.background = 'rgba(255,255,255,0.07)' }}
-          onMouseDown={(e) => { if (!loading) e.currentTarget.style.transform = 'scale(0.99)' }}
-          onMouseUp={(e) => { e.currentTarget.style.transform = 'scale(1)' }}
-          onTouchStart={(e) => { if (!loading) e.currentTarget.style.transform = 'scale(0.99)' }}
-          onTouchEnd={(e) => { e.currentTarget.style.transform = 'scale(1)' }}
-        >
-          {loading ? (
-            <>
-              <div
-                className="animate-spin"
-                style={{
-                  width: '36px',
-                  height: '36px',
-                  border: '3px solid rgba(255,255,255,0.25)',
-                  borderTopColor: '#ffffff',
-                  borderRadius: '50%',
-                }}
-                aria-hidden="true"
-              />
-              <span style={{ fontSize: '16px', color: 'rgba(255,255,255,0.7)', fontWeight: 400 }}>
-                Procesando...
-              </span>
-            </>
-          ) : (
-            <>
-              <SpreadsheetIcon />
-              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '6px' }}>
-                <span style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '16px', fontWeight: 600, color: '#ffffff' }}>
-                  <UploadIcon />
-                  Seleccionar archivo .xlsx
+        {/* File picker zone */}
+        <div style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: '16px' }}>
+          <button
+            type="button"
+            onClick={() => inputRef.current?.click()}
+            disabled={loading}
+            aria-label="Seleccionar archivo Excel"
+            style={{
+              width: '100%',
+              minHeight: '120px',
+              background: selectedFile ? 'rgba(255,255,255,0.10)' : 'rgba(255,255,255,0.06)',
+              border: `2px dashed ${selectedFile ? 'rgba(255,255,255,0.55)' : 'rgba(255,255,255,0.25)'}`,
+              borderRadius: '14px',
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '10px',
+              cursor: loading ? 'default' : 'pointer',
+              transition: 'background 150ms ease, border-color 150ms ease, transform 100ms ease',
+              padding: '20px',
+              touchAction: 'manipulation',
+            }}
+            onMouseEnter={(e) => { if (!loading) e.currentTarget.style.background = 'rgba(255,255,255,0.11)' }}
+            onMouseLeave={(e) => { if (!loading) e.currentTarget.style.background = selectedFile ? 'rgba(255,255,255,0.10)' : 'rgba(255,255,255,0.06)' }}
+            onMouseDown={(e) => { if (!loading) e.currentTarget.style.transform = 'scale(0.99)' }}
+            onMouseUp={(e) => { e.currentTarget.style.transform = 'scale(1)' }}
+            onTouchStart={(e) => { if (!loading) e.currentTarget.style.transform = 'scale(0.99)' }}
+            onTouchEnd={(e) => { e.currentTarget.style.transform = 'scale(1)' }}
+          >
+            <SpreadsheetIcon />
+            {selectedFile ? (
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px' }}>
+                <span style={{ fontSize: '15px', fontWeight: 600, color: '#ffffff', letterSpacing: '0.01em' }}>
+                  {selectedFile.name}
                 </span>
-                <span style={{ fontSize: '13px', color: 'rgba(255,255,255,0.4)', fontWeight: 400 }}>
-                  o arrastra y suelta aquí
+                <span style={{ fontSize: '12px', color: 'rgba(255,255,255,0.45)', fontWeight: 400 }}>
+                  Toca para cambiar archivo
                 </span>
               </div>
-            </>
-          )}
-        </button>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px' }}>
+                <span style={{ fontSize: '15px', fontWeight: 500, color: 'rgba(255,255,255,0.8)' }}>
+                  Seleccionar archivo .xlsx
+                </span>
+                <span style={{ fontSize: '12px', color: 'rgba(255,255,255,0.38)', fontWeight: 400 }}>
+                  Solo archivos Excel (.xlsx)
+                </span>
+              </div>
+            )}
+          </button>
 
-        {/* Error */}
-        {error && (
-          <p
-            role="alert"
+          {/* Error */}
+          {error && (
+            <p
+              role="alert"
+              style={{
+                fontSize: '13px',
+                color: 'rgba(255,120,120,0.9)',
+                textAlign: 'center',
+                margin: 0,
+                lineHeight: 1.5,
+              }}
+            >
+              {error}
+            </p>
+          )}
+
+          {/* Cargar plantilla button */}
+          <button
+            type="button"
+            onClick={handleUpload}
+            disabled={!selectedFile || loading}
+            aria-disabled={!selectedFile || loading}
+            aria-busy={loading}
             style={{
-              fontSize: '14px',
-              color: 'rgba(255,120,120,0.9)',
-              textAlign: 'center',
-              margin: 0,
-              lineHeight: 1.5,
+              fontFamily: 'Outfit, sans-serif',
+              fontSize: '18px',
+              fontWeight: 600,
+              color: (selectedFile && !loading) ? '#172137' : 'rgba(23,33,55,0.45)',
+              background: (selectedFile && !loading) ? '#ffffff' : 'rgba(255,255,255,0.22)',
+              border: 'none',
+              borderRadius: '12px',
+              padding: '20px',
+              width: '100%',
+              minHeight: '64px',
+              cursor: (selectedFile && !loading) ? 'pointer' : 'default',
+              touchAction: 'manipulation',
+              transition: 'background 200ms ease, color 200ms ease, transform 100ms ease',
+              letterSpacing: '0.02em',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '10px',
             }}
+            onMouseDown={(e) => { if (selectedFile && !loading) e.currentTarget.style.transform = 'scale(0.98)' }}
+            onMouseUp={(e) => { e.currentTarget.style.transform = 'scale(1)' }}
+            onMouseLeave={(e) => { e.currentTarget.style.transform = 'scale(1)' }}
+            onTouchStart={(e) => { if (selectedFile && !loading) e.currentTarget.style.transform = 'scale(0.98)' }}
+            onTouchEnd={(e) => { e.currentTarget.style.transform = 'scale(1)' }}
           >
-            {error}
-          </p>
-        )}
+            {loading ? (
+              <>
+                <div
+                  className="animate-spin"
+                  style={{
+                    width: '18px',
+                    height: '18px',
+                    border: '2px solid rgba(23,33,55,0.2)',
+                    borderTopColor: 'rgba(23,33,55,0.6)',
+                    borderRadius: '50%',
+                    flexShrink: 0,
+                  }}
+                  aria-hidden="true"
+                />
+                Procesando...
+              </>
+            ) : (
+              <>
+                <UploadIcon />
+                Cargar plantilla
+              </>
+            )}
+          </button>
+        </div>
 
         {/* Once note */}
-        <p style={{ fontSize: '13px', color: 'rgba(255,255,255,0.3)', textAlign: 'center', margin: 0, lineHeight: 1.5 }}>
-          Solo se necesita hacer esto una vez. La plantilla queda guardada en el dispositivo.
+        <p style={{
+          fontSize: '13px',
+          color: 'rgba(255,255,255,0.28)',
+          textAlign: 'center',
+          margin: 0,
+          lineHeight: 1.6,
+        }}>
+          Solo se necesita hacer esto una vez.
+          La plantilla queda guardada en el dispositivo.
         </p>
 
       </div>
@@ -199,7 +245,7 @@ export default function Setup({ onReady }) {
       <input
         ref={inputRef}
         type="file"
-        accept=".xlsx,.xls"
+        accept=".xlsx"
         onChange={handleFileChange}
         style={{ display: 'none' }}
         aria-hidden="true"

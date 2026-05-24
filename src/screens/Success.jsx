@@ -19,15 +19,15 @@ function CheckIcon() {
 
 function ExportIcon() {
   return (
-    <svg width="20" height="20" viewBox="0 0 20 20" fill="none" aria-hidden="true">
-      <path d="M3 13v3a1 1 0 001 1h12a1 1 0 001-1v-3" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
-      <path d="M10 3v9M7 9l3 3 3-3" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+    <svg width="18" height="18" viewBox="0 0 18 18" fill="none" aria-hidden="true">
+      <path d="M3 12v2a1 1 0 001 1h10a1 1 0 001-1v-2" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" />
+      <path d="M9 3v8M6 8l3 3 3-3" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" />
     </svg>
   )
 }
 
 export default function Success({ patient, date, onAddAnother, onExport, onNewSession, exporting }) {
-  const firstName = (patient?.nombre ?? '').split(' ')[0] || 'Paciente'
+  const nombre = (patient?.nombre ?? '').trim() || 'Paciente'
 
   return (
     <div
@@ -72,13 +72,13 @@ export default function Success({ patient, date, onAddAnother, onExport, onNewSe
           alignItems: 'center',
           justifyContent: 'center',
           padding: '32px 24px 64px',
-          gap: '40px',
+          gap: '44px',
         }}
       >
-        {/* Check + name */}
-        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '20px' }}>
+        {/* Checkmark + patient name + date */}
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '22px' }}>
           <CheckIcon />
-          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '6px' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px' }}>
             <span
               style={{
                 fontSize: 'clamp(26px, 8vw, 36px)',
@@ -88,10 +88,16 @@ export default function Success({ patient, date, onAddAnother, onExport, onNewSe
                 textAlign: 'center',
               }}
             >
-              {firstName} agregado
+              {nombre} agregado
             </span>
-            <span style={{ fontSize: '15px', color: 'rgba(255,255,255,0.45)', fontWeight: 400, textAlign: 'center' }}>
-              Guardado en la plantilla Excel
+            <span style={{
+              fontSize: '14px',
+              color: 'rgba(255,255,255,0.42)',
+              fontWeight: 400,
+              textAlign: 'center',
+              letterSpacing: '0.02em',
+            }}>
+              {formatDate(date)}
             </span>
           </div>
         </div>
@@ -99,7 +105,7 @@ export default function Success({ patient, date, onAddAnother, onExport, onNewSe
         {/* Actions */}
         <div style={{ width: '100%', maxWidth: '420px', display: 'flex', flexDirection: 'column', gap: '14px' }}>
 
-          {/* Primary: add another */}
+          {/* Primary — add another */}
           <button
             onClick={onAddAnother}
             style={{
@@ -115,7 +121,7 @@ export default function Success({ patient, date, onAddAnother, onExport, onNewSe
               minHeight: '64px',
               cursor: 'pointer',
               touchAction: 'manipulation',
-              transition: 'background 200ms ease, transform 100ms ease',
+              transition: 'transform 100ms ease',
               letterSpacing: '0.02em',
             }}
             onMouseDown={(e) => { e.currentTarget.style.transform = 'scale(0.98)' }}
@@ -127,16 +133,17 @@ export default function Success({ patient, date, onAddAnother, onExport, onNewSe
             Agregar otro paciente
           </button>
 
-          {/* Secondary: export */}
+          {/* Secondary — export */}
           <button
             onClick={onExport}
             disabled={exporting}
+            aria-disabled={exporting}
             aria-busy={exporting}
             style={{
               fontFamily: 'Outfit, sans-serif',
               fontSize: '17px',
               fontWeight: 500,
-              color: exporting ? 'rgba(255,255,255,0.45)' : '#ffffff',
+              color: exporting ? 'rgba(255,255,255,0.4)' : '#ffffff',
               background: 'none',
               border: '1.5px solid rgba(255,255,255,0.35)',
               borderRadius: '12px',
@@ -178,25 +185,25 @@ export default function Success({ patient, date, onAddAnother, onExport, onNewSe
             ) : (
               <>
                 <ExportIcon />
-                Descargar Excel
+                Exportar Excel actualizado
               </>
             )}
           </button>
 
-          {/* Tertiary: new session */}
+          {/* Tertiary — new session */}
           <button
             onClick={onNewSession}
             style={{
               fontFamily: 'Outfit, sans-serif',
               fontSize: '14px',
               fontWeight: 400,
-              color: 'rgba(255,255,255,0.38)',
+              color: 'rgba(255,255,255,0.35)',
               background: 'none',
               border: 'none',
               cursor: 'pointer',
               textAlign: 'center',
               textDecoration: 'underline',
-              textDecorationColor: 'rgba(255,255,255,0.2)',
+              textDecorationColor: 'rgba(255,255,255,0.18)',
               textUnderlineOffset: '3px',
               padding: '4px 0',
               touchAction: 'manipulation',
@@ -204,7 +211,7 @@ export default function Success({ patient, date, onAddAnother, onExport, onNewSe
               marginTop: '-4px',
             }}
             onMouseEnter={(e) => { e.currentTarget.style.color = 'rgba(255,255,255,0.65)' }}
-            onMouseLeave={(e) => { e.currentTarget.style.color = 'rgba(255,255,255,0.38)' }}
+            onMouseLeave={(e) => { e.currentTarget.style.color = 'rgba(255,255,255,0.35)' }}
           >
             Nueva sesión
           </button>
