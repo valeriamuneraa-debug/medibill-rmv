@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { readPatients } from '../lib/xlsx.js'
 
 function serialToDateStr(serial) {
@@ -45,8 +45,13 @@ const TH = ({ children, width, right }) => (
   </th>
 )
 
-export default function Registry({ onBack, onEditPatient, onExport, exporting }) {
-  const [patients, setPatients] = useState(null)
+export default function Registry({ onBack, onEditPatient, onExport, exporting, onDelete }) {
+  const [patients, setPatients]       = useState(null)
+  const [deleteTarget, setDeleteTarget] = useState(null)
+  const [deleting, setDeleting]       = useState(false)
+
+  const longPressTimer  = useRef(null)
+  const longPressFired  = useRef(false)
 
   useEffect(() => {
     readPatients()
@@ -54,8 +59,36 @@ export default function Registry({ onBack, onEditPatient, onExport, exporting })
       .catch(() => setPatients([]))
   }, [])
 
-  const press = (e) => { e.currentTarget.style.background = 'rgba(255,255,255,0.06)' }
-  const release = (e) => { e.currentTarget.style.background = 'transparent' }
+  function startLongPress(patient) {
+    longPressFired.current = false
+    longPressTimer.current = setTimeout(() => {
+      longPressFired.current = true
+      setDeleteTarget(patient)
+    }, 500)
+  }
+
+  function cancelLongPress() {
+    clearTimeout(longPressTimer.current)
+  }
+
+  function handleRowClick(patient) {
+    if (longPressFired.current) return
+    onEditPatient(patient)
+  }
+
+  async function handleDelete() {
+    if (deleting || !deleteTarget) return
+    setDeleting(true)
+    try {
+      await onDelete(deleteTarget.id)
+    } finally {
+      setDeleting(false)
+      setDeleteTarget(null)
+    }
+  }
+
+  const rowPress   = (e) => { e.currentTarget.style.background = 'rgba(255,255,255,0.06)' }
+  const rowRelease = (e) => { e.currentTarget.style.background = 'transparent' }
 
   return (
     <div
@@ -119,7 +152,6 @@ export default function Registry({ onBack, onEditPatient, onExport, exporting })
       {/* Scrollable content */}
       <main style={{ flex: 1, overflowY: 'auto', WebkitOverflowScrolling: 'touch' }}>
         {patients === null ? (
-          /* Loading */
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '80px 24px' }}>
             <div
               className="animate-spin"
@@ -134,7 +166,6 @@ export default function Registry({ onBack, onEditPatient, onExport, exporting })
             />
           </div>
         ) : patients.length === 0 ? (
-          /* Empty state */
           <div style={{
             display: 'flex',
             flexDirection: 'column',
@@ -152,95 +183,103 @@ export default function Registry({ onBack, onEditPatient, onExport, exporting })
             </p>
           </div>
         ) : (
-          /* Table */
-          <div style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
-            <table style={{
-              borderCollapse: 'collapse',
-              width: '100%',
-              minWidth: '560px',
+          <>
+            <p style={{
+              fontSize: '12px',
+              color: 'rgba(255,255,255,0.28)',
+              textAlign: 'center',
+              margin: '8px 0 0',
+              letterSpacing: '0.01em',
             }}>
-              <thead>
-                <tr>
-                  <TH width="150px">Nombre</TH>
-                  <TH width="72px">Fecha</TH>
-                  <TH width="120px">Procedimiento</TH>
-                  <TH width="105px" right>Factura Dian</TH>
-                  <TH width="105px" right>Presupuesto</TH>
-                </tr>
-              </thead>
-              <tbody>
-                {patients.map((p) => (
-                  <tr
-                    key={p._row}
-                    onClick={() => onEditPatient(p)}
-                    style={{ cursor: 'pointer', transition: 'background 100ms ease' }}
-                    onMouseEnter={press}
-                    onMouseLeave={release}
-                    onMouseDown={press}
-                    onMouseUp={release}
-                    onTouchStart={press}
-                    onTouchEnd={release}
-                  >
-                    <td style={{
-                      padding: '14px 12px',
-                      fontSize: '15px',
-                      fontWeight: 500,
-                      borderBottom: '1px solid rgba(255,255,255,0.07)',
-                      maxWidth: '150px',
-                      overflow: 'hidden',
-                      textOverflow: 'ellipsis',
-                      whiteSpace: 'nowrap',
-                    }}>
-                      {p.nombre || '—'}
-                    </td>
-                    <td style={{
-                      padding: '14px 12px',
-                      fontSize: '13px',
-                      color: 'rgba(255,255,255,0.6)',
-                      borderBottom: '1px solid rgba(255,255,255,0.07)',
-                      whiteSpace: 'nowrap',
-                    }}>
-                      {serialToDateStr(p.fecha)}
-                    </td>
-                    <td style={{
-                      padding: '14px 12px',
-                      fontSize: '13px',
-                      color: p.procedimiento ? '#ffffff' : 'rgba(255,255,255,0.25)',
-                      borderBottom: '1px solid rgba(255,255,255,0.07)',
-                      maxWidth: '120px',
-                      overflow: 'hidden',
-                      textOverflow: 'ellipsis',
-                      whiteSpace: 'nowrap',
-                    }}>
-                      {p.procedimiento || '—'}
-                    </td>
-                    <td style={{
-                      padding: '14px 12px',
-                      fontSize: '13px',
-                      textAlign: 'right',
-                      fontVariantNumeric: 'tabular-nums',
-                      color: p.facturaDian != null ? '#ffffff' : 'rgba(255,255,255,0.25)',
-                      borderBottom: '1px solid rgba(255,255,255,0.07)',
-                      whiteSpace: 'nowrap',
-                    }}>
-                      {formatPeso(p.facturaDian)}
-                    </td>
-                    <td style={{
-                      padding: '14px 12px',
-                      fontSize: '13px',
-                      textAlign: 'right',
-                      fontVariantNumeric: 'tabular-nums',
-                      color: p.presupuesto != null ? '#ffffff' : 'rgba(255,255,255,0.25)',
-                      borderBottom: '1px solid rgba(255,255,255,0.07)',
-                      whiteSpace: 'nowrap',
-                    }}>
-                      {formatPeso(p.presupuesto)}
-                    </td>
+              Mantén presionado para eliminar un paciente
+            </p>
+            <div style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
+              <table style={{ borderCollapse: 'collapse', width: '100%', minWidth: '560px' }}>
+                <thead>
+                  <tr>
+                    <TH width="150px">Nombre</TH>
+                    <TH width="72px">Fecha</TH>
+                    <TH width="120px">Procedimiento</TH>
+                    <TH width="105px" right>Factura Dian</TH>
+                    <TH width="105px" right>Presupuesto</TH>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                </thead>
+                <tbody>
+                  {patients.map((p) => (
+                    <tr
+                      key={p._row}
+                      onClick={() => handleRowClick(p)}
+                      onTouchStart={() => startLongPress(p)}
+                      onTouchEnd={cancelLongPress}
+                      onTouchMove={cancelLongPress}
+                      onContextMenu={(e) => { e.preventDefault(); setDeleteTarget(p) }}
+                      style={{ cursor: 'pointer', transition: 'background 100ms ease' }}
+                      onMouseEnter={rowPress}
+                      onMouseLeave={rowRelease}
+                      onMouseDown={rowPress}
+                      onMouseUp={rowRelease}
+                    >
+                      <td style={{
+                        padding: '14px 12px',
+                        fontSize: '15px',
+                        fontWeight: 500,
+                        borderBottom: '1px solid rgba(255,255,255,0.07)',
+                        maxWidth: '150px',
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        whiteSpace: 'nowrap',
+                      }}>
+                        {p.nombre || '—'}
+                      </td>
+                      <td style={{
+                        padding: '14px 12px',
+                        fontSize: '13px',
+                        color: 'rgba(255,255,255,0.6)',
+                        borderBottom: '1px solid rgba(255,255,255,0.07)',
+                        whiteSpace: 'nowrap',
+                      }}>
+                        {serialToDateStr(p.fecha)}
+                      </td>
+                      <td style={{
+                        padding: '14px 12px',
+                        fontSize: '13px',
+                        color: p.procedimiento ? '#ffffff' : 'rgba(255,255,255,0.25)',
+                        borderBottom: '1px solid rgba(255,255,255,0.07)',
+                        maxWidth: '120px',
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        whiteSpace: 'nowrap',
+                      }}>
+                        {p.procedimiento || '—'}
+                      </td>
+                      <td style={{
+                        padding: '14px 12px',
+                        fontSize: '13px',
+                        textAlign: 'right',
+                        fontVariantNumeric: 'tabular-nums',
+                        color: p.facturaDian != null ? '#ffffff' : 'rgba(255,255,255,0.25)',
+                        borderBottom: '1px solid rgba(255,255,255,0.07)',
+                        whiteSpace: 'nowrap',
+                      }}>
+                        {formatPeso(p.facturaDian)}
+                      </td>
+                      <td style={{
+                        padding: '14px 12px',
+                        fontSize: '13px',
+                        textAlign: 'right',
+                        fontVariantNumeric: 'tabular-nums',
+                        color: p.presupuesto != null ? '#ffffff' : 'rgba(255,255,255,0.25)',
+                        borderBottom: '1px solid rgba(255,255,255,0.07)',
+                        whiteSpace: 'nowrap',
+                      }}>
+                        {formatPeso(p.presupuesto)}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </>
         )}
       </main>
 
@@ -308,6 +347,136 @@ export default function Registry({ onBack, onEditPatient, onExport, exporting })
             )}
           </button>
         </footer>
+      )}
+
+      {/* Delete confirmation dialog */}
+      {deleteTarget && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-label="Confirmar eliminación"
+          style={{
+            position: 'fixed',
+            inset: 0,
+            background: 'rgba(0,0,0,0.65)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: '24px',
+            zIndex: 50,
+          }}
+          onClick={(e) => { if (e.target === e.currentTarget && !deleting) setDeleteTarget(null) }}
+        >
+          <div style={{
+            background: '#172137',
+            border: '1px solid rgba(255,255,255,0.15)',
+            borderRadius: '16px',
+            padding: '28px 24px',
+            width: '100%',
+            maxWidth: '340px',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '20px',
+          }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+              <p style={{
+                fontSize: '16px',
+                lineHeight: 1.55,
+                color: '#ffffff',
+                textAlign: 'center',
+                margin: 0,
+                fontFamily: 'Outfit, sans-serif',
+                fontWeight: 600,
+              }}>
+                ¿Eliminar a {deleteTarget.nombre || 'este paciente'} del registro?
+              </p>
+              <p style={{
+                fontSize: '14px',
+                lineHeight: 1.5,
+                color: 'rgba(255,255,255,0.45)',
+                textAlign: 'center',
+                margin: 0,
+                fontFamily: 'Outfit, sans-serif',
+              }}>
+                Esta acción no se puede deshacer.
+              </p>
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+              <button
+                onClick={() => setDeleteTarget(null)}
+                disabled={deleting}
+                style={{
+                  fontFamily: 'Outfit, sans-serif',
+                  fontSize: '16px',
+                  fontWeight: 600,
+                  color: '#172137',
+                  background: '#ffffff',
+                  border: 'none',
+                  borderRadius: '12px',
+                  padding: '16px',
+                  minHeight: '56px',
+                  cursor: deleting ? 'default' : 'pointer',
+                  opacity: deleting ? 0.5 : 1,
+                  touchAction: 'manipulation',
+                  transition: 'transform 100ms ease',
+                }}
+                onMouseDown={(e) => { if (!deleting) e.currentTarget.style.transform = 'scale(0.98)' }}
+                onMouseUp={(e) => { e.currentTarget.style.transform = 'scale(1)' }}
+                onTouchStart={(e) => { if (!deleting) e.currentTarget.style.transform = 'scale(0.98)' }}
+                onTouchEnd={(e) => { e.currentTarget.style.transform = 'scale(1)' }}
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={handleDelete}
+                disabled={deleting}
+                aria-busy={deleting}
+                style={{
+                  fontFamily: 'Outfit, sans-serif',
+                  fontSize: '15px',
+                  fontWeight: 500,
+                  color: deleting ? 'rgba(255,100,100,0.4)' : 'rgba(255,100,100,0.9)',
+                  background: 'none',
+                  border: '1.5px solid rgba(255,100,100,0.3)',
+                  borderRadius: '12px',
+                  padding: '14px',
+                  minHeight: '52px',
+                  cursor: deleting ? 'default' : 'pointer',
+                  touchAction: 'manipulation',
+                  transition: 'transform 100ms ease, color 150ms ease',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '8px',
+                }}
+                onMouseDown={(e) => { if (!deleting) e.currentTarget.style.transform = 'scale(0.98)' }}
+                onMouseUp={(e) => { e.currentTarget.style.transform = 'scale(1)' }}
+                onTouchStart={(e) => { if (!deleting) e.currentTarget.style.transform = 'scale(0.98)' }}
+                onTouchEnd={(e) => { e.currentTarget.style.transform = 'scale(1)' }}
+              >
+                {deleting ? (
+                  <>
+                    <div
+                      className="animate-spin"
+                      style={{
+                        width: '16px',
+                        height: '16px',
+                        border: '2px solid rgba(255,100,100,0.2)',
+                        borderTopColor: 'rgba(255,100,100,0.6)',
+                        borderRadius: '50%',
+                        flexShrink: 0,
+                      }}
+                      aria-hidden="true"
+                    />
+                    Eliminando...
+                  </>
+                ) : (
+                  'Eliminar'
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   )

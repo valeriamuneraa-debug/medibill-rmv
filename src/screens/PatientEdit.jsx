@@ -10,7 +10,7 @@ const FIELDS = [
   { key: 'facturaDian',   label: 'Factura Dian',       inputMode: 'decimal', hint: 'Valor en pesos' },
 ]
 
-export default function PatientEdit({ patient, onBack, onSave }) {
+export default function PatientEdit({ patient, onBack, onSave, onDelete }) {
   const [form, setForm] = useState({
     procedimiento: String(patient?.procedimiento ?? ''),
     presupuesto:   patient?.presupuesto  != null ? String(patient.presupuesto)  : '',
@@ -20,8 +20,10 @@ export default function PatientEdit({ patient, onBack, onSave }) {
     tiempo:        patient?.tiempo       != null ? String(patient.tiempo)       : '',
     facturaDian:   patient?.facturaDian  != null ? String(patient.facturaDian)  : '',
   })
-  const [focusedField, setFocusedField] = useState(null)
-  const [saving, setSaving] = useState(false)
+  const [focusedField, setFocusedField]       = useState(null)
+  const [saving, setSaving]                   = useState(false)
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
+  const [deleting, setDeleting]               = useState(false)
 
   function update(key, value) {
     setForm(prev => ({ ...prev, [key]: value }))
@@ -34,6 +36,16 @@ export default function PatientEdit({ patient, onBack, onSave }) {
       await onSave(patient._row, { ...form })
     } finally {
       setSaving(false)
+    }
+  }
+
+  async function handleDelete() {
+    if (deleting) return
+    setDeleting(true)
+    try {
+      await onDelete(patient.id)
+    } finally {
+      setDeleting(false)
     }
   }
 
@@ -231,8 +243,166 @@ export default function PatientEdit({ patient, onBack, onSave }) {
             )}
           </button>
 
+          {/* Delete — destructive, red text, visually separated */}
+          <button
+            type="button"
+            onClick={() => setShowDeleteConfirm(true)}
+            style={{
+              fontFamily: 'Outfit, sans-serif',
+              fontSize: '15px',
+              fontWeight: 500,
+              color: 'rgba(255,100,100,0.8)',
+              background: 'none',
+              border: 'none',
+              cursor: 'pointer',
+              textAlign: 'center',
+              padding: '12px 0',
+              width: '100%',
+              minHeight: '48px',
+              touchAction: 'manipulation',
+              transition: 'color 150ms ease',
+              letterSpacing: '0.01em',
+            }}
+            onMouseEnter={(e) => { e.currentTarget.style.color = 'rgba(255,100,100,1)' }}
+            onMouseLeave={(e) => { e.currentTarget.style.color = 'rgba(255,100,100,0.8)' }}
+          >
+            Eliminar paciente
+          </button>
+
         </div>
       </main>
+
+      {/* Delete confirmation dialog */}
+      {showDeleteConfirm && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-label="Confirmar eliminación"
+          style={{
+            position: 'fixed',
+            inset: 0,
+            background: 'rgba(0,0,0,0.65)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: '24px',
+            zIndex: 50,
+          }}
+          onClick={(e) => { if (e.target === e.currentTarget && !deleting) setShowDeleteConfirm(false) }}
+        >
+          <div style={{
+            background: '#172137',
+            border: '1px solid rgba(255,255,255,0.15)',
+            borderRadius: '16px',
+            padding: '28px 24px',
+            width: '100%',
+            maxWidth: '340px',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '20px',
+          }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+              <p style={{
+                fontSize: '16px',
+                lineHeight: 1.55,
+                color: '#ffffff',
+                textAlign: 'center',
+                margin: 0,
+                fontFamily: 'Outfit, sans-serif',
+                fontWeight: 600,
+              }}>
+                ¿Eliminar a {patient?.nombre || 'este paciente'} del registro?
+              </p>
+              <p style={{
+                fontSize: '14px',
+                lineHeight: 1.5,
+                color: 'rgba(255,255,255,0.45)',
+                textAlign: 'center',
+                margin: 0,
+                fontFamily: 'Outfit, sans-serif',
+              }}>
+                Esta acción no se puede deshacer.
+              </p>
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+              {/* Cancel = primary (safe action) */}
+              <button
+                onClick={() => setShowDeleteConfirm(false)}
+                disabled={deleting}
+                style={{
+                  fontFamily: 'Outfit, sans-serif',
+                  fontSize: '16px',
+                  fontWeight: 600,
+                  color: '#172137',
+                  background: '#ffffff',
+                  border: 'none',
+                  borderRadius: '12px',
+                  padding: '16px',
+                  minHeight: '56px',
+                  cursor: deleting ? 'default' : 'pointer',
+                  opacity: deleting ? 0.5 : 1,
+                  touchAction: 'manipulation',
+                  transition: 'transform 100ms ease',
+                }}
+                onMouseDown={(e) => { if (!deleting) e.currentTarget.style.transform = 'scale(0.98)' }}
+                onMouseUp={(e) => { e.currentTarget.style.transform = 'scale(1)' }}
+                onTouchStart={(e) => { if (!deleting) e.currentTarget.style.transform = 'scale(0.98)' }}
+                onTouchEnd={(e) => { e.currentTarget.style.transform = 'scale(1)' }}
+              >
+                Cancelar
+              </button>
+              {/* Eliminar = destructive ghost */}
+              <button
+                onClick={handleDelete}
+                disabled={deleting}
+                aria-busy={deleting}
+                style={{
+                  fontFamily: 'Outfit, sans-serif',
+                  fontSize: '15px',
+                  fontWeight: 500,
+                  color: deleting ? 'rgba(255,100,100,0.4)' : 'rgba(255,100,100,0.9)',
+                  background: 'none',
+                  border: '1.5px solid rgba(255,100,100,0.3)',
+                  borderRadius: '12px',
+                  padding: '14px',
+                  minHeight: '52px',
+                  cursor: deleting ? 'default' : 'pointer',
+                  touchAction: 'manipulation',
+                  transition: 'transform 100ms ease, color 150ms ease',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '8px',
+                }}
+                onMouseDown={(e) => { if (!deleting) e.currentTarget.style.transform = 'scale(0.98)' }}
+                onMouseUp={(e) => { e.currentTarget.style.transform = 'scale(1)' }}
+                onTouchStart={(e) => { if (!deleting) e.currentTarget.style.transform = 'scale(0.98)' }}
+                onTouchEnd={(e) => { e.currentTarget.style.transform = 'scale(1)' }}
+              >
+                {deleting ? (
+                  <>
+                    <div
+                      className="animate-spin"
+                      style={{
+                        width: '16px',
+                        height: '16px',
+                        border: '2px solid rgba(255,100,100,0.2)',
+                        borderTopColor: 'rgba(255,100,100,0.6)',
+                        borderRadius: '50%',
+                        flexShrink: 0,
+                      }}
+                      aria-hidden="true"
+                    />
+                    Eliminando...
+                  </>
+                ) : (
+                  'Eliminar'
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

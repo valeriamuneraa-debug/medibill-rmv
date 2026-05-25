@@ -9,7 +9,7 @@ import NuevaFecha from './screens/NuevaFecha'
 import Registry from './screens/Registry'
 import PatientEdit from './screens/PatientEdit'
 import { hasWorkbook } from './lib/indexedDB.js'
-import { appendPatient as dbAppendPatient, downloadWorkbook, updatePatient } from './lib/xlsx.js'
+import { appendPatient as dbAppendPatient, downloadWorkbook, updatePatient, deletePatient } from './lib/xlsx.js'
 
 export class AppErrorBoundary extends Component {
   constructor(props) {
@@ -196,6 +196,12 @@ export default function App() {
     setScreen(SCREENS.REGISTRY)
   }
 
+  async function handleDeletePatient(patientId) {
+    await deletePatient(patientId)
+    setRegistryRefreshKey((k) => k + 1)
+    setScreen(SCREENS.REGISTRY)
+  }
+
   // ── Render ─────────────────────────────────────────────────────────────────
   switch (screen) {
     case SCREENS.LOADING:
@@ -280,6 +286,7 @@ export default function App() {
           onEditPatient={handleEditPatient}
           onExport={handleExportFromRegistry}
           exporting={exporting}
+          onDelete={handleDeletePatient}
         />
       )
 
@@ -289,6 +296,7 @@ export default function App() {
           patient={editingPatient}
           onBack={() => setScreen(SCREENS.REGISTRY)}
           onSave={handleSavePatient}
+          onDelete={handleDeletePatient}
         />
       )
 

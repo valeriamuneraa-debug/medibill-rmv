@@ -192,6 +192,7 @@ export async function readPatients() {
     patients.push({
       _row:          r,
       nombre:        String(get(COL.NOMBRE)        ?? ''),
+      id:            get(COL.ID),
       fecha:         get(COL.FECHA),
       procedimiento: String(get(COL.PROCEDIMIENTO) ?? ''),
       presupuesto:   get(COL.PRESUPUESTO),
@@ -204,6 +205,106 @@ export async function readPatients() {
   }
 
   return patients
+}
+
+export async function deletePatient(patientId) {
+  const b64 = await getWorkbook()
+  if (!b64) throw new Error('No hay plantilla guardada')
+
+  const wb = XLSX.read(b64, { type: 'base64' })
+  const ws = wb.Sheets[SHEET_NAME]
+  if (!ws || !ws['!ref']) return
+
+  const range    = XLSX.utils.decode_range(ws['!ref'])
+  const targetId = String(patientId).trim()
+
+  // Find the row matching by ID (col C) — never rely on row index alone
+  let deleteRow = -1
+  for (let r = 1; r <= range.e.r; r++) {
+    const cell = ws[XLSX.utils.encode_cell({ r, c: COL.ID })]
+    if (cell && String(cell.v ?? '').trim() === targetId) {
+      deleteRow = r
+      break
+    }
+  }
+  if (deleteRow === -1) return
+
+  // Shift every row after deleteRow up by one
+  for (let r = deleteRow; r < range.e.r; r++) {
+    for (let c = 0; c <= range.e.c; c++) {
+      const src = XLSX.utils.encode_cell({ r: r + 1, c })
+      const dst = XLSX.utils.encode_cell({ r, c })
+      if (ws[src]) { ws[dst] = ws[src] } else { delete ws[dst] }
+    }
+  }
+  // Clear the now-duplicate last row
+  for (let c = 0; c <= range.e.c; c++) {
+    delete ws[XLSX.utils.encode_cell({ r: range.e.r, c })]
+  }
+
+  range.e.r = Math.max(0, range.e.r - 1)
+  ws['!ref'] = XLSX.utils.encode_range(range)
+
+  buildResumen(wb)
+  await setWorkbook(XLSX.write(wb, { type: 'base64', bookType: 'xlsx' }))
+}
+
+// Load a new .xlsx template, optionally preserving all patient rows from the
+// current workbook. Returns the number of patient rows migrated.
+export async function migrateWorkbook(newFile, keepPatients) {
+  const existingRows = []
+
+  if (keepPatients) {
+    const b64 = await getWorkbook()
+    if (b64) {
+      const wb = XLSX.read(b64, { type: 'base64' })
+      const ws = wb.Sheets[SHEET_NAME]
+      if (ws && ws['!ref']) {
+        const range = XLSX.utils.decode_range(ws['!ref'])
+        for (let r = 1; r <= range.e.r; r++) {
+          const nombreCell = ws[XLSX.utils.encode_cell({ r, c: COL.NOMBRE })]
+          if (!nombreCell || !String(nombreCell.v ?? '').trim()) continue
+          const row = {}
+          for (let c = 0; c <= range.e.c; c++) {
+            const addr = XLSX.utils.encode_cell({ r, c })
+            if (ws[addr]) row[c] = { ...ws[addr] }
+          }
+          existingRows.push(row)
+        }
+      }
+    }
+  }
+
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = async (e) => {
+      try {
+        const wb = XLSX.read(e.target.result, { type: 'array' })
+        if (!wb.SheetNames.includes(SHEET_NAME)) {
+          reject(new Error(`El archivo no contiene la hoja "${SHEET_NAME}"`))
+          return
+        }
+        if (existingRows.length > 0) {
+          const ws = wb.Sheets[SHEET_NAME]
+          let row = findAppendRow(ws)
+          for (const rowData of existingRows) {
+            for (const [colStr, cell] of Object.entries(rowData)) {
+              ws[XLSX.utils.encode_cell({ r: row, c: Number(colStr) })] = cell
+            }
+            expandRef(ws, row)
+            row++
+          }
+          buildResumen(wb)
+        }
+        await setWorkbook(XLSX.write(wb, { type: 'base64', bookType: 'xlsx' }))
+        resolve(existingRows.length)
+      } catch (err) {
+        reject(err)
+      }
+    }
+    reader.onerror = () => reject(new Error('Error al leer el archivo'))
+    reader.readAsArrayBuffer(newFile)
+  })
 }
 
 export async function updatePatient(rowIndex, fields) {

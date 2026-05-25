@@ -1,6 +1,5 @@
 import { useRef, useState } from 'react'
-import { storeUploadedWorkbook } from '../lib/xlsx.js'
-import { clearWorkbook } from '../lib/indexedDB.js'
+import { storeUploadedWorkbook, migrateWorkbook } from '../lib/xlsx.js'
 
 function SpreadsheetIcon() {
   return (
@@ -23,24 +22,18 @@ function UploadIcon() {
 }
 
 export default function Setup({ onReady }) {
-  const inputRef = useRef(null)
-  const [selectedFile, setSelectedFile] = useState(null)
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState(null)
-  const [showConfirm, setShowConfirm] = useState(false)
-  const [resetting, setResetting] = useState(false)
+  const inputRef       = useRef(null)
+  const changeInputRef = useRef(null)
 
-  async function handleReset() {
-    setResetting(true)
-    try {
-      await clearWorkbook()
-      setSelectedFile(null)
-      setError(null)
-    } finally {
-      setResetting(false)
-      setShowConfirm(false)
-    }
-  }
+  const [selectedFile, setSelectedFile] = useState(null)
+  const [loading, setLoading]           = useState(false)
+  const [error, setError]               = useState(null)
+
+  // Migration dialog state
+  const [pendingFile, setPendingFile]       = useState(null)
+  const [dialogPhase, setDialogPhase]       = useState(null) // null | 'options' | 'loading' | 'success'
+  const [migrationCount, setMigrationCount] = useState(0)
+  const [migrateError, setMigrateError]     = useState(null)
 
   function handleFileChange(e) {
     const file = e.target.files?.[0]
@@ -55,6 +48,20 @@ export default function Setup({ onReady }) {
     setSelectedFile(file)
   }
 
+  function handleChangeFileSelected(e) {
+    const file = e.target.files?.[0]
+    e.target.value = ''
+    if (!file) return
+    if (!file.name.endsWith('.xlsx')) {
+      setError('Solo se aceptan archivos .xlsx')
+      return
+    }
+    setError(null)
+    setPendingFile(file)
+    setMigrateError(null)
+    setDialogPhase('options')
+  }
+
   async function handleUpload() {
     if (!selectedFile || loading) return
     setLoading(true)
@@ -66,6 +73,34 @@ export default function Setup({ onReady }) {
       setError(err.message ?? 'Error al procesar el archivo')
       setLoading(false)
     }
+  }
+
+  async function handleMigrate(keepPatients) {
+    if (!pendingFile) return
+    setDialogPhase('loading')
+    setMigrateError(null)
+    try {
+      const count = await migrateWorkbook(pendingFile, keepPatients)
+      setMigrationCount(count)
+      setDialogPhase('success')
+    } catch (err) {
+      setMigrateError(err.message ?? 'Error al procesar el archivo')
+      setDialogPhase('options')
+    }
+  }
+
+  function handleMigrationSuccess() {
+    setDialogPhase(null)
+    setPendingFile(null)
+    setMigrationCount(0)
+    onReady()
+  }
+
+  function closeMigrationDialog() {
+    if (dialogPhase === 'loading') return
+    setDialogPhase(null)
+    setPendingFile(null)
+    setMigrateError(null)
   }
 
   return (
@@ -253,10 +288,10 @@ export default function Setup({ onReady }) {
           Exporta cuando quieras — siempre descarga el registro completo.
         </p>
 
-        {/* Reset link */}
+        {/* Cambiar plantilla — replaces old Reiniciar */}
         <button
           type="button"
-          onClick={() => setShowConfirm(true)}
+          onClick={() => changeInputRef.current?.click()}
           style={{
             fontFamily: 'Outfit, sans-serif',
             fontSize: '12px',
@@ -276,19 +311,19 @@ export default function Setup({ onReady }) {
           onMouseEnter={(e) => { e.currentTarget.style.color = 'rgba(255,255,255,0.5)' }}
           onMouseLeave={(e) => { e.currentTarget.style.color = 'rgba(255,255,255,0.22)' }}
         >
-          Reiniciar plantilla
+          Cambiar plantilla
         </button>
 
       </div>
 
       <div style={{ flex: '1.4 1 0' }} />
 
-      {/* Confirm dialog */}
-      {showConfirm && (
+      {/* Migration dialog */}
+      {dialogPhase && (
         <div
           role="dialog"
           aria-modal="true"
-          aria-label="Confirmar reinicio"
+          aria-label="Cambiar plantilla"
           style={{
             position: 'fixed',
             inset: 0,
@@ -299,7 +334,7 @@ export default function Setup({ onReady }) {
             padding: '24px',
             zIndex: 50,
           }}
-          onClick={(e) => { if (e.target === e.currentTarget) setShowConfirm(false) }}
+          onClick={(e) => { if (e.target === e.currentTarget) closeMigrationDialog() }}
         >
           <div style={{
             background: '#172137',
@@ -312,76 +347,228 @@ export default function Setup({ onReady }) {
             flexDirection: 'column',
             gap: '20px',
           }}>
-            <p style={{
-              fontSize: '16px',
-              lineHeight: 1.65,
-              color: '#ffffff',
-              textAlign: 'center',
-              margin: 0,
-              fontFamily: 'Outfit, sans-serif',
-            }}>
-              ¿Seguro? Esto borrará todos los pacientes agregados en este dispositivo.
-            </p>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-              {/* Cancel = primary visual prominence (safe action) */}
-              <button
-                onClick={() => setShowConfirm(false)}
-                style={{
-                  fontFamily: 'Outfit, sans-serif',
+
+            {dialogPhase === 'options' && (
+              <>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                  <p style={{
+                    fontSize: '16px',
+                    fontWeight: 600,
+                    lineHeight: 1.5,
+                    color: '#ffffff',
+                    textAlign: 'center',
+                    margin: 0,
+                    fontFamily: 'Outfit, sans-serif',
+                  }}>
+                    ¿Qué hacer con los pacientes actuales?
+                  </p>
+                  <p style={{
+                    fontSize: '13px',
+                    color: 'rgba(255,255,255,0.45)',
+                    textAlign: 'center',
+                    margin: 0,
+                    fontFamily: 'Outfit, sans-serif',
+                    lineHeight: 1.5,
+                  }}>
+                    {pendingFile?.name}
+                  </p>
+                </div>
+
+                {migrateError && (
+                  <p role="alert" style={{
+                    fontSize: '13px',
+                    color: 'rgba(255,120,120,0.9)',
+                    textAlign: 'center',
+                    margin: '-8px 0 0',
+                    lineHeight: 1.5,
+                    fontFamily: 'Outfit, sans-serif',
+                  }}>
+                    {migrateError}
+                  </p>
+                )}
+
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                  {/* Option A — primary (keep patients, safe) */}
+                  <button
+                    onClick={() => handleMigrate(true)}
+                    style={{
+                      fontFamily: 'Outfit, sans-serif',
+                      fontSize: '16px',
+                      fontWeight: 600,
+                      color: '#172137',
+                      background: '#ffffff',
+                      border: 'none',
+                      borderRadius: '12px',
+                      padding: '16px',
+                      minHeight: '56px',
+                      cursor: 'pointer',
+                      touchAction: 'manipulation',
+                      transition: 'transform 100ms ease',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      alignItems: 'center',
+                      gap: '3px',
+                    }}
+                    onMouseDown={(e) => { e.currentTarget.style.transform = 'scale(0.98)' }}
+                    onMouseUp={(e) => { e.currentTarget.style.transform = 'scale(1)' }}
+                    onTouchStart={(e) => { e.currentTarget.style.transform = 'scale(0.98)' }}
+                    onTouchEnd={(e) => { e.currentTarget.style.transform = 'scale(1)' }}
+                  >
+                    Mantener mis pacientes
+                    <span style={{ fontSize: '12px', fontWeight: 400, color: 'rgba(23,33,55,0.55)' }}>
+                      Se copian a la nueva plantilla
+                    </span>
+                  </button>
+
+                  {/* Option B — ghost (destructive: start fresh) */}
+                  <button
+                    onClick={() => handleMigrate(false)}
+                    style={{
+                      fontFamily: 'Outfit, sans-serif',
+                      fontSize: '15px',
+                      fontWeight: 500,
+                      color: 'rgba(255,255,255,0.65)',
+                      background: 'none',
+                      border: '1.5px solid rgba(255,255,255,0.25)',
+                      borderRadius: '12px',
+                      padding: '14px',
+                      minHeight: '52px',
+                      cursor: 'pointer',
+                      touchAction: 'manipulation',
+                      transition: 'transform 100ms ease, color 150ms ease',
+                    }}
+                    onMouseDown={(e) => { e.currentTarget.style.transform = 'scale(0.98)' }}
+                    onMouseUp={(e) => { e.currentTarget.style.transform = 'scale(1)' }}
+                    onTouchStart={(e) => { e.currentTarget.style.transform = 'scale(0.98)' }}
+                    onTouchEnd={(e) => { e.currentTarget.style.transform = 'scale(1)' }}
+                  >
+                    Empezar desde cero
+                  </button>
+
+                  <button
+                    onClick={closeMigrationDialog}
+                    style={{
+                      fontFamily: 'Outfit, sans-serif',
+                      fontSize: '14px',
+                      fontWeight: 400,
+                      color: 'rgba(255,255,255,0.38)',
+                      background: 'none',
+                      border: 'none',
+                      cursor: 'pointer',
+                      padding: '8px 0',
+                      touchAction: 'manipulation',
+                      transition: 'color 150ms ease',
+                    }}
+                    onMouseEnter={(e) => { e.currentTarget.style.color = 'rgba(255,255,255,0.65)' }}
+                    onMouseLeave={(e) => { e.currentTarget.style.color = 'rgba(255,255,255,0.38)' }}
+                  >
+                    Cancelar
+                  </button>
+                </div>
+              </>
+            )}
+
+            {dialogPhase === 'loading' && (
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '16px', padding: '12px 0' }}>
+                <div
+                  className="animate-spin"
+                  style={{
+                    width: '32px',
+                    height: '32px',
+                    border: '2.5px solid rgba(255,255,255,0.2)',
+                    borderTopColor: '#ffffff',
+                    borderRadius: '50%',
+                  }}
+                  aria-hidden="true"
+                />
+                <p style={{
                   fontSize: '16px',
-                  fontWeight: 600,
-                  color: '#172137',
-                  background: '#ffffff',
-                  border: 'none',
-                  borderRadius: '12px',
-                  padding: '16px',
-                  minHeight: '56px',
-                  cursor: 'pointer',
-                  touchAction: 'manipulation',
-                  transition: 'transform 100ms ease',
-                }}
-                onMouseDown={(e) => { e.currentTarget.style.transform = 'scale(0.98)' }}
-                onMouseUp={(e) => { e.currentTarget.style.transform = 'scale(1)' }}
-                onTouchStart={(e) => { e.currentTarget.style.transform = 'scale(0.98)' }}
-                onTouchEnd={(e) => { e.currentTarget.style.transform = 'scale(1)' }}
-              >
-                Cancelar
-              </button>
-              {/* Destructive = secondary visual (ghost) */}
-              <button
-                onClick={handleReset}
-                disabled={resetting}
-                style={{
-                  fontFamily: 'Outfit, sans-serif',
-                  fontSize: '15px',
                   fontWeight: 500,
-                  color: resetting ? 'rgba(255,255,255,0.3)' : 'rgba(255,255,255,0.65)',
-                  background: 'none',
-                  border: '1.5px solid rgba(255,255,255,0.25)',
-                  borderRadius: '12px',
-                  padding: '14px',
-                  minHeight: '52px',
-                  cursor: resetting ? 'default' : 'pointer',
-                  touchAction: 'manipulation',
-                  transition: 'transform 100ms ease, color 150ms ease',
-                }}
-                onMouseDown={(e) => { if (!resetting) e.currentTarget.style.transform = 'scale(0.98)' }}
-                onMouseUp={(e) => { e.currentTarget.style.transform = 'scale(1)' }}
-                onTouchStart={(e) => { if (!resetting) e.currentTarget.style.transform = 'scale(0.98)' }}
-                onTouchEnd={(e) => { e.currentTarget.style.transform = 'scale(1)' }}
-              >
-                {resetting ? 'Borrando...' : 'Sí, reiniciar'}
-              </button>
-            </div>
+                  color: '#ffffff',
+                  textAlign: 'center',
+                  margin: 0,
+                  fontFamily: 'Outfit, sans-serif',
+                }}>
+                  Procesando plantilla...
+                </p>
+              </div>
+            )}
+
+            {dialogPhase === 'success' && (
+              <>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                  <p style={{
+                    fontSize: '16px',
+                    fontWeight: 600,
+                    lineHeight: 1.5,
+                    color: '#ffffff',
+                    textAlign: 'center',
+                    margin: 0,
+                    fontFamily: 'Outfit, sans-serif',
+                  }}>
+                    {migrationCount > 0
+                      ? `¡Listo! ${migrationCount} paciente${migrationCount !== 1 ? 's' : ''} migrado${migrationCount !== 1 ? 's' : ''}`
+                      : '¡Plantilla cargada!'}
+                  </p>
+                  {migrationCount > 0 && (
+                    <p style={{
+                      fontSize: '13px',
+                      color: 'rgba(255,255,255,0.45)',
+                      textAlign: 'center',
+                      margin: 0,
+                      fontFamily: 'Outfit, sans-serif',
+                      lineHeight: 1.5,
+                    }}>
+                      Todos los registros se copiaron a la nueva plantilla.
+                    </p>
+                  )}
+                </div>
+                <button
+                  onClick={handleMigrationSuccess}
+                  style={{
+                    fontFamily: 'Outfit, sans-serif',
+                    fontSize: '16px',
+                    fontWeight: 600,
+                    color: '#172137',
+                    background: '#ffffff',
+                    border: 'none',
+                    borderRadius: '12px',
+                    padding: '16px',
+                    minHeight: '56px',
+                    cursor: 'pointer',
+                    touchAction: 'manipulation',
+                    transition: 'transform 100ms ease',
+                  }}
+                  onMouseDown={(e) => { e.currentTarget.style.transform = 'scale(0.98)' }}
+                  onMouseUp={(e) => { e.currentTarget.style.transform = 'scale(1)' }}
+                  onTouchStart={(e) => { e.currentTarget.style.transform = 'scale(0.98)' }}
+                  onTouchEnd={(e) => { e.currentTarget.style.transform = 'scale(1)' }}
+                >
+                  Continuar
+                </button>
+              </>
+            )}
+
           </div>
         </div>
       )}
 
+      {/* Primary upload input */}
       <input
         ref={inputRef}
         type="file"
         accept=".xlsx"
         onChange={handleFileChange}
+        style={{ display: 'none' }}
+        aria-hidden="true"
+        tabIndex={-1}
+      />
+      {/* Change template input */}
+      <input
+        ref={changeInputRef}
+        type="file"
+        accept=".xlsx"
+        onChange={handleChangeFileSelected}
         style={{ display: 'none' }}
         aria-hidden="true"
         tabIndex={-1}
