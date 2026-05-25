@@ -64,68 +64,32 @@
 
   const sleep = ms => new Promise(r => setTimeout(r, ms))
 
-  // Find a form element by scanning label text (label[for], sibling, or wrapper).
-  function findInputByLabel(labelText) {
-    const labels = document.querySelectorAll('label')
-    for (const label of labels) {
-      if (label.textContent.trim().startsWith(labelText)) {
-        const forId = label.getAttribute('for')
-        if (forId) {
-          const el = document.getElementById(forId)
-          if (el) return el
-        }
-        const input = label.parentElement?.querySelector('input, select, textarea')
-        if (input) return input
-        const next = label.nextElementSibling
-        if (next && (next.tagName === 'INPUT' || next.tagName === 'SELECT')) return next
-        const wrapper = label.closest('.form-group, .field, div')
-        if (wrapper) {
-          const el2 = wrapper.querySelector('input, select')
-          if (el2 && el2 !== label) return el2
-        }
-      }
+  function fillField(id, value) {
+    const el = document.getElementById(id)
+    if (!el) { console.warn('MediBill: not found:', id); return false }
+    el.value = String(value)
+    el.dispatchEvent(new Event('change', { bubbles: true }))
+    el.dispatchEvent(new Event('input',  { bubbles: true }))
+    console.log('MediBill filled', id, '=', String(value))
+    return true
+  }
+
+  function selectByText(id, text) {
+    const el = document.getElementById(id)
+    if (!el) { console.warn('MediBill: select not found:', id); return false }
+    const options = Array.from(el.options)
+    const match = options.find(o =>
+      o.text.trim().toLowerCase().includes(text.toLowerCase()) ||
+      text.toLowerCase().includes(o.text.trim().toLowerCase())
+    )
+    if (!match) {
+      console.warn('MediBill: no match for', text, 'options:', options.map(o => o.text))
+      return false
     }
-    return null
-  }
-
-  // Fill a React-controlled text input (triggers focus/input/change/blur).
-  function fillReactInput(el, value) {
-    if (!el) return false
-    try {
-      const nativeSetter = Object.getOwnPropertyDescriptor(
-        window.HTMLInputElement.prototype, 'value'
-      ).set
-      nativeSetter.call(el, String(value))
-      el.dispatchEvent(new Event('focus',  { bubbles: true }))
-      el.dispatchEvent(new Event('input',  { bubbles: true }))
-      el.dispatchEvent(new Event('change', { bubbles: true }))
-      el.dispatchEvent(new Event('blur',   { bubbles: true }))
-      return true
-    } catch (e) { return false }
-  }
-
-  // Fill a React-controlled select by visible option text (partial match).
-  async function fillReactSelect(el, optionText) {
-    if (!el) return false
-    try {
-      const options = Array.from(el.options)
-      const match = options.find(o =>
-        o.text.trim().includes(optionText) || optionText.includes(o.text.trim())
-      )
-      if (!match) {
-        console.warn('MediBill: no option found for', optionText,
-          'in', options.map(o => o.text))
-        return false
-      }
-      const nativeSetter = Object.getOwnPropertyDescriptor(
-        window.HTMLSelectElement.prototype, 'value'
-      ).set
-      nativeSetter.call(el, match.value)
-      el.dispatchEvent(new Event('focus',  { bubbles: true }))
-      el.dispatchEvent(new Event('change', { bubbles: true }))
-      el.dispatchEvent(new Event('blur',   { bubbles: true }))
-      return true
-    } catch (e) { return false }
+    el.value = match.value
+    el.dispatchEvent(new Event('change', { bubbles: true }))
+    console.log('MediBill select', id, '=', match.text)
+    return true
   }
 
   // ── Floating button ───────────────────────────────────────────────────────
@@ -217,142 +181,61 @@
 
   // ── City → departamento lookup ────────────────────────────────────────────
 
-  function getCityAndDept(direccion) {
-    if (!direccion) return { ciudad: '', dpto: '' }
+  function getCityDept(direccion) {
+    if (!direccion) return { ciudad: 'Medellín', departamento: 'Antioquia' }
     const norm = direccion.toLowerCase()
       .normalize('NFD').replace(/[̀-ͯ]/g, '')
     for (const [key, val] of Object.entries(CITIES)) {
-      if (norm.includes(key)) return val
+      if (norm.includes(key)) return { ciudad: val.ciudad, departamento: val.dpto }
     }
-    return { ciudad: '', dpto: '' }
+    return { ciudad: 'Medellín', departamento: 'Antioquia' }
   }
 
   // ── Form fill ─────────────────────────────────────────────────────────────
 
   async function fillForm(patient) {
-    const log = (msg) => console.log('MediBill:', msg)
-    await sleep(500)
+    await sleep(800)
 
-    // 1. Nombre del cliente
-    const nombre = findInputByLabel('Nombre del cliente')
-      || findInputByLabel('Nombre')
-      || findInputByLabel('Razón social')
-    if (fillReactInput(nombre, patient.nombre || '')) {
-      log('nombre ✓'); nombre?.scrollIntoView({ block: 'center' })
-    } else { log('nombre ✗ — no field found') }
-    await sleep(300)
+    fillField('client_name', patient.nombre || '')
+    await sleep(200)
 
-    // 2. Tipo de documento
-    const tipoDoc = findInputByLabel('Tipo de documento')
-      || findInputByLabel('Tipo documento')
-    if (await fillReactSelect(tipoDoc, patient.tipoDoc || 'Cédula de ciudadanía')) {
-      log('tipoDoc ✓')
-    } else { log('tipoDoc ✗') }
-    await sleep(300)
+    selectByText('identification_type_id', patient.tipoDoc || 'Cédula de ciudadanía')
+    await sleep(200)
 
-    // 3. Número de documento
-    const numDoc = findInputByLabel('Número de documento')
-      || findInputByLabel('Número documento')
-      || findInputByLabel('NIT / Cédula')
-    if (fillReactInput(numDoc, patient.id || '')) {
-      log('numDoc ✓')
-    } else { log('numDoc ✗') }
-    await sleep(300)
+    fillField('client_document_number', patient.id || '')
+    await sleep(200)
 
-    // 4. Tipo de organización
-    const tipoOrg = findInputByLabel('Tipo de organización')
-      || findInputByLabel('Tipo organización')
-      || findInputByLabel('Tipo de persona')
-    if (await fillReactSelect(tipoOrg, 'Persona Natural')) {
-      log('tipoOrg ✓')
-    } else { log('tipoOrg ✗') }
-    await sleep(300)
+    selectByText('client_organization_type', 'Persona Natural')
+    await sleep(200)
 
-    // 5. Régimen fiscal
-    const regimen = findInputByLabel('Régimen')
-      || findInputByLabel('Régimen fiscal')
-      || findInputByLabel('Regimen')
-    if (await fillReactSelect(regimen, 'No responsable de IVA')) {
-      log('regimen ✓')
-    } else { log('regimen ✗') }
-    await sleep(300)
+    selectByText('client_regime_type', 'No responsable de IVA')
+    await sleep(200)
 
-    // 6. Responsabilidad fiscal
-    const respFiscal = findInputByLabel('Responsabilidad fiscal')
-      || findInputByLabel('Responsabilidades fiscales')
-    if (await fillReactSelect(respFiscal, 'R-99-PN')) {
-      log('respFiscal ✓')
-    } else { log('respFiscal ✗') }
-    await sleep(300)
+    selectByText('tax_responsibility_id', 'R-99-PN')
+    await sleep(200)
 
-    // 7. Detalle tributario
-    const detTrib = findInputByLabel('Detalle tributario')
-      || findInputByLabel('Tributos')
-    if (await fillReactSelect(detTrib, 'ZZ')) {
-      log('detTrib ✓')
-    } else { log('detTrib ✗') }
-    await sleep(300)
+    selectByText('client_tax_detail_id', 'ZZ')
+    await sleep(200)
 
-    // 8. País
-    const pais = findInputByLabel('País')
-      || findInputByLabel('Pais')
-    if (await fillReactSelect(pais, 'Colombia')) {
-      log('pais ✓')
-    } else { log('pais ✗') }
-    await sleep(300)
+    const dept = getCityDept(patient.direccion)
+    selectByText('department_id', dept.departamento)
+    await sleep(1500)
 
-    // 9. Departamento
-    const { ciudad, dpto } = getCityAndDept(patient.direccion)
-    const dptoEl = findInputByLabel('Departamento')
-    if (await fillReactSelect(dptoEl, dpto)) {
-      log('dpto ✓ →', dpto)
-    } else { log('dpto ✗') }
+    selectByText('municipality_id', dept.ciudad)
+    await sleep(200)
 
-    // Ciudad dropdown repopulates after departamento — wait longer
-    await sleep(700)
+    fillField('client_address_1', patient.direccion || '')
+    await sleep(200)
 
-    // 10. Ciudad
-    const ciudadEl = findInputByLabel('Ciudad')
-      || findInputByLabel('Municipio')
-    if (await fillReactSelect(ciudadEl, ciudad)) {
-      log('ciudad ✓ →', ciudad)
-    } else { log('ciudad ✗') }
-    await sleep(300)
+    selectByText('client_gender', patient.genero || 'Femenino')
+    await sleep(200)
 
-    // 11. Dirección
-    const dir = findInputByLabel('Dirección')
-      || findInputByLabel('Direccion')
-      || findInputByLabel('Dirección de residencia')
-    if (fillReactInput(dir, patient.direccion || '')) {
-      log('direccion ✓')
-    } else { log('direccion ✗') }
-    await sleep(300)
+    fillField('client_phone', patient.telefono || '')
+    await sleep(200)
 
-    // 12. Género
-    const genero = findInputByLabel('Género')
-      || findInputByLabel('Sexo')
-    if (await fillReactSelect(genero, patient.genero || 'Femenino')) {
-      log('genero ✓')
-    } else { log('genero ✗') }
-    await sleep(300)
+    fillField('client_email', patient.email || '')
 
-    // 13. Teléfono
-    const tel = findInputByLabel('Teléfono')
-      || findInputByLabel('Telefono')
-      || findInputByLabel('Celular')
-    if (fillReactInput(tel, patient.telefono || '')) {
-      log('telefono ✓')
-    } else { log('telefono ✗') }
-    await sleep(300)
-
-    // 14. Correo electrónico
-    const email = findInputByLabel('Correo')
-      || findInputByLabel('Email')
-      || findInputByLabel('Correo electrónico')
-    if (fillReactInput(email, patient.email || '')) {
-      log('email ✓')
-    } else { log('email ✗') }
-
+    console.log('MediBill: form fill complete')
     return true
   }
 
