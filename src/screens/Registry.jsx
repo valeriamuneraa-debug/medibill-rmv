@@ -446,14 +446,32 @@ export default function Registry({ onBack, onEditPatient, onExport, exporting, o
         )}
       </header>
 
+      {/* ── Hint text (static below header, outside scroll) ── */}
+      {patients && patients.length > 0 && (
+        <p style={{
+          flexShrink: 0,
+          fontSize: '12px',
+          color: 'rgba(255,255,255,0.28)',
+          textAlign: 'center',
+          margin: 0,
+          padding: '4px 16px 10px',
+          letterSpacing: '0.01em',
+          background: '#172137',
+        }}>
+          {selectionMode
+            ? 'Toca filas para seleccionar o deseleccionar'
+            : 'Toca una fila para editarla'}
+        </p>
+      )}
+
       {/* ── Main content ── */}
       <main
         style={{
           flex: 1,
           overflowY: 'auto',
+          overflowX: 'auto',
           WebkitOverflowScrolling: 'touch',
-          paddingBottom: selectionMode ? '96px' : 0,
-          transition: 'padding-bottom 200ms ease',
+          paddingBottom: patients && patients.length > 0 ? (selectionMode ? '96px' : '180px') : 0,
         }}
       >
         {patients === null ? (
@@ -489,22 +507,10 @@ export default function Registry({ onBack, onEditPatient, onExport, exporting, o
           </div>
         ) : (
           <>
-            <p style={{
-              fontSize: '12px',
-              color: 'rgba(255,255,255,0.28)',
-              textAlign: 'center',
-              margin: '8px 0 0',
-              letterSpacing: '0.01em',
-            }}>
-              {selectionMode
-                ? 'Toca filas para seleccionar o deseleccionar'
-                : 'Mantén presionado para seleccionar varios'}
-            </p>
-            <div style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
               <table style={{
                 borderCollapse: 'collapse',
                 width: '100%',
-                minWidth: selectionMode ? '560px' : '660px',
+                minWidth: selectionMode ? '640px' : '740px',
               }}>
                 <thead>
                   <tr>
@@ -512,8 +518,8 @@ export default function Registry({ onBack, onEditPatient, onExport, exporting, o
                     <TH width="150px">Nombre</TH>
                     <TH width="72px">Fecha</TH>
                     <TH width="120px">Procedimiento</TH>
-                    <TH width="105px" right>Factura Dian</TH>
-                    <TH width="105px" right>Presupuesto</TH>
+                    <TH width="140px" right>Factura Dian</TH>
+                    <TH width="140px" right>Presupuesto</TH>
                     {!selectionMode && <TH width="28px" />}
                     {!selectionMode && <TH width="88px" />}
                   </tr>
@@ -682,7 +688,6 @@ export default function Registry({ onBack, onEditPatient, onExport, exporting, o
                   })}
                 </tbody>
               </table>
-            </div>
           </>
         )}
       </main>
@@ -690,7 +695,11 @@ export default function Registry({ onBack, onEditPatient, onExport, exporting, o
       {/* ── Normal-mode footer ── */}
       {!selectionMode && patients && patients.length > 0 && (
         <footer style={{
-          flexShrink: 0,
+          position: 'fixed',
+          bottom: 0,
+          left: 0,
+          right: 0,
+          zIndex: 15,
           padding: '16px 24px 32px',
           borderTop: '1px solid rgba(255,255,255,0.1)',
           background: '#172137',
