@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 
 // ── Replace with your extension's ID after sideloading (see extension/INSTALL.md) ──
-const EXTENSION_ID = 'YOUR_EXTENSION_ID_HERE'
+const EXTENSION_ID = 'ojjbjnbminciinjlfmgmggccjebafjap'
 
 function formatDate(isoDate) {
   if (!isoDate) return ''
