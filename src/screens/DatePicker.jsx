@@ -275,37 +275,63 @@ export default function DatePicker({ onContinue, onRegistry, onReset }) {
               ¿Para qué fecha son estos pacientes?
             </label>
 
-            <input
-              id="session-date"
-              type="date"
-              value={date}
-              onChange={(e) => setDate(e.target.value)}
-              required
-              aria-required="true"
-              style={{
-                fontFamily: 'Outfit, sans-serif',
-                fontSize: '20px',
-                fontWeight: 500,
-                color: date ? '#ffffff' : 'rgba(255,255,255,0.4)',
-                background: 'rgba(255,255,255,0.08)',
-                border: '1.5px solid rgba(255,255,255,0.18)',
-                borderRadius: '12px',
-                padding: '18px 20px',
-                width: '100%',
-                minHeight: '64px',
-                outline: 'none',
-                cursor: 'pointer',
-                transition: 'border-color 200ms ease, background 200ms ease',
-              }}
-              onFocus={(e) => {
-                e.target.style.borderColor = 'rgba(255,255,255,0.55)'
-                e.target.style.background = 'rgba(255,255,255,0.12)'
-              }}
-              onBlur={(e) => {
-                e.target.style.borderColor = 'rgba(255,255,255,0.18)'
-                e.target.style.background = 'rgba(255,255,255,0.08)'
-              }}
-            />
+            <div style={{ position: 'relative', width: '100%' }}>
+              <input
+                id="session-date"
+                type="date"
+                value={date}
+                onChange={(e) => setDate(e.target.value)}
+                required
+                aria-required="true"
+                style={{
+                  fontFamily: 'Outfit, sans-serif',
+                  fontSize: '20px',
+                  fontWeight: 500,
+                  color: date ? '#ffffff' : 'rgba(255,255,255,0.4)',
+                  background: 'rgba(255,255,255,0.08)',
+                  border: '1.5px solid rgba(255,255,255,0.18)',
+                  borderRadius: '12px',
+                  padding: '18px 52px 18px 20px',
+                  width: '100%',
+                  minHeight: '64px',
+                  outline: 'none',
+                  cursor: 'pointer',
+                  position: 'relative',
+                  transition: 'border-color 200ms ease, background 200ms ease',
+                }}
+                onFocus={(e) => {
+                  e.target.style.borderColor = 'rgba(255,255,255,0.55)'
+                  e.target.style.background = 'rgba(255,255,255,0.12)'
+                }}
+                onBlur={(e) => {
+                  e.target.style.borderColor = 'rgba(255,255,255,0.18)'
+                  e.target.style.background = 'rgba(255,255,255,0.08)'
+                }}
+              />
+              <svg
+                width="20" height="20"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="white"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                aria-hidden="true"
+                style={{
+                  position: 'absolute',
+                  right: '16px',
+                  top: '50%',
+                  transform: 'translateY(-50%)',
+                  opacity: 0.6,
+                  pointerEvents: 'none',
+                }}
+              >
+                <rect x="3" y="4" width="18" height="18" rx="2" ry="2"/>
+                <line x1="16" y1="2" x2="16" y2="6"/>
+                <line x1="8" y1="2" x2="8" y2="6"/>
+                <line x1="3" y1="10" x2="21" y2="10"/>
+              </svg>
+            </div>
           </div>
 
           <button
