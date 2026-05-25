@@ -1,6 +1,40 @@
 import { useEffect, useRef, useState } from 'react'
 import { readPatients } from '../lib/xlsx.js'
 
+const EXTENSION_ID = 'ojjbjnbminciinjlfmgmggccjebafjap'
+
+async function sendToEmision(patientData) {
+  if (typeof chrome !== 'undefined' && chrome.runtime?.sendMessage) {
+    return new Promise((resolve) => {
+      try {
+        chrome.runtime.sendMessage(
+          EXTENSION_ID,
+          { type: 'ADD_TO_QUEUE', patient: patientData },
+          (response) => {
+            if (chrome.runtime.lastError || !response?.ok) {
+              navigator.clipboard.writeText(JSON.stringify(patientData, null, 2))
+                .then(() => resolve('copied')).catch(() => resolve('error'))
+            } else { resolve('sent') }
+          }
+        )
+      } catch {
+        navigator.clipboard.writeText(JSON.stringify(patientData, null, 2))
+          .then(() => resolve('copied')).catch(() => resolve('error'))
+      }
+    })
+  }
+  try {
+    await navigator.clipboard.writeText(JSON.stringify(patientData, null, 2))
+    return 'copied'
+  } catch { return 'error' }
+}
+
+const EMISION_TOAST = {
+  sent:   'Enviado a la cola de emisión',
+  copied: 'Datos copiados al portapapeles',
+  error:  'No se pudo enviar — verifica la extensión',
+}
+
 function serialToDateStr(serial) {
   if (!serial || typeof serial !== 'number') return '—'
   const d = new Date(Math.round((serial - 25569) * 86400000))
@@ -46,12 +80,36 @@ const TH = ({ children, width, right }) => (
 )
 
 export default function Registry({ onBack, onEditPatient, onExport, exporting, onDelete }) {
-  const [patients, setPatients]       = useState(null)
+  const [patients, setPatients]         = useState(null)
   const [deleteTarget, setDeleteTarget] = useState(null)
-  const [deleting, setDeleting]       = useState(false)
+  const [deleting, setDeleting]         = useState(false)
+  const [emisionToast, setEmisionToast] = useState(null)
 
   const longPressTimer  = useRef(null)
   const longPressFired  = useRef(false)
+
+  useEffect(() => {
+    if (!emisionToast) return
+    const t = setTimeout(() => setEmisionToast(null), 3500)
+    return () => clearTimeout(t)
+  }, [emisionToast])
+
+  async function handleEmision(e, patient) {
+    e.stopPropagation()
+    const patientData = {
+      nombre:    patient.nombre    ?? '',
+      id:        patient.id != null ? String(patient.id) : '',
+      edad:      patient.edad != null ? String(patient.edad) : '',
+      telefono:  patient.telefono  ?? '',
+      direccion: patient.direccion ?? '',
+      email:     patient.email     ?? '',
+      tipoDoc:   patient.tipoDoc   ?? 'Cédula de ciudadanía',
+      genero:    patient.genero    ?? 'Femenino',
+      fecha:     '',
+    }
+    const result = await sendToEmision(patientData)
+    setEmisionToast(result)
+  }
 
   useEffect(() => {
     readPatients()
@@ -196,7 +254,7 @@ export default function Registry({ onBack, onEditPatient, onExport, exporting, o
               Mantén presionado para eliminar un paciente
             </p>
             <div style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
-              <table style={{ borderCollapse: 'collapse', width: '100%', minWidth: '560px' }}>
+              <table style={{ borderCollapse: 'collapse', width: '100%', minWidth: '660px' }}>
                 <thead>
                   <tr>
                     <TH width="150px">Nombre</TH>
@@ -205,6 +263,7 @@ export default function Registry({ onBack, onEditPatient, onExport, exporting, o
                     <TH width="105px" right>Factura Dian</TH>
                     <TH width="105px" right>Presupuesto</TH>
                     <TH width="28px" />
+                    <TH width="88px" />
                   </tr>
                 </thead>
                 <tbody>
@@ -287,6 +346,40 @@ export default function Registry({ onBack, onEditPatient, onExport, exporting, o
                       }}>
                         ›
                       </td>
+                      <td
+                        style={{
+                          padding: '8px 10px',
+                          borderBottom: '1px solid rgba(255,255,255,0.07)',
+                          whiteSpace: 'nowrap',
+                        }}
+                        onClick={(e) => e.stopPropagation()}
+                        onTouchStart={(e) => e.stopPropagation()}
+                        onContextMenu={(e) => e.stopPropagation()}
+                      >
+                        <button
+                          onClick={(e) => handleEmision(e, p)}
+                          style={{
+                            fontFamily: 'Outfit, sans-serif',
+                            fontSize: '11px',
+                            fontWeight: 500,
+                            color: 'rgba(255,255,255,0.65)',
+                            background: 'none',
+                            border: '1px solid rgba(255,255,255,0.2)',
+                            borderRadius: '8px',
+                            padding: '6px 10px',
+                            minHeight: '36px',
+                            cursor: 'pointer',
+                            touchAction: 'manipulation',
+                            whiteSpace: 'nowrap',
+                            letterSpacing: '0.02em',
+                            transition: 'border-color 150ms ease, color 150ms ease',
+                          }}
+                          onMouseEnter={(e) => { e.currentTarget.style.borderColor = 'rgba(255,255,255,0.45)'; e.currentTarget.style.color = '#ffffff' }}
+                          onMouseLeave={(e) => { e.currentTarget.style.borderColor = 'rgba(255,255,255,0.2)'; e.currentTarget.style.color = 'rgba(255,255,255,0.65)' }}
+                        >
+                          → Emisión
+                        </button>
+                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -360,6 +453,36 @@ export default function Registry({ onBack, onEditPatient, onExport, exporting, o
             )}
           </button>
         </footer>
+      )}
+
+      {/* Emisión toast */}
+      {emisionToast && (
+        <div
+          role="status"
+          aria-live="polite"
+          style={{
+            position: 'fixed',
+            bottom: '24px',
+            left: '50%',
+            transform: 'translateX(-50%)',
+            background: 'rgba(255,255,255,0.12)',
+            backdropFilter: 'blur(8px)',
+            WebkitBackdropFilter: 'blur(8px)',
+            border: '1px solid rgba(255,255,255,0.2)',
+            borderRadius: '10px',
+            padding: '12px 20px',
+            fontFamily: 'Outfit, sans-serif',
+            fontSize: '14px',
+            fontWeight: 500,
+            color: '#ffffff',
+            whiteSpace: 'nowrap',
+            zIndex: 100,
+            letterSpacing: '0.01em',
+            pointerEvents: 'none',
+          }}
+        >
+          {EMISION_TOAST[emisionToast]}
+        </div>
       )}
 
       {/* Delete confirmation dialog */}

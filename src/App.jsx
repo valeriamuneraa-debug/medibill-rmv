@@ -8,6 +8,7 @@ import Success from './screens/Success'
 import NuevaFecha from './screens/NuevaFecha'
 import Registry from './screens/Registry'
 import PatientEdit from './screens/PatientEdit'
+import ClinicalData from './screens/ClinicalData'
 import { hasWorkbook } from './lib/indexedDB.js'
 import { appendPatient as dbAppendPatient, downloadWorkbook, updatePatient, deletePatient } from './lib/xlsx.js'
 
@@ -75,9 +76,10 @@ const SCREENS = {
   REVIEW:       'REVIEW',
   SUCCESS:      'SUCCESS',
   EXPORT:       'EXPORT',
-  NUEVA_FECHA:  'NUEVA_FECHA',
-  REGISTRY:     'REGISTRY',
-  PATIENT_EDIT: 'PATIENT_EDIT',
+  NUEVA_FECHA:   'NUEVA_FECHA',
+  REGISTRY:      'REGISTRY',
+  PATIENT_EDIT:  'PATIENT_EDIT',
+  CLINICAL_DATA: 'CLINICAL_DATA',
 }
 
 export default function App() {
@@ -124,15 +126,30 @@ export default function App() {
     setScreen(SCREENS.REVIEW)
   }
 
-  // ── Review → confirm ───────────────────────────────────────────────────────
-  async function handleConfirm(editedPatient) {
-    await dbAppendPatient(editedPatient, session.date)
+  // ── Review → ClinicalData → confirm ───────────────────────────────────────
+  function handleConfirm(editedPatient) {
+    setSession((s) => ({ ...s, currentPatient: editedPatient, currentImage: null }))
+    setScreen(SCREENS.CLINICAL_DATA)
+  }
+
+  async function handleClinicalSave(patientWithClinical) {
+    await dbAppendPatient(patientWithClinical, session.date)
     setSession((s) => ({
       ...s,
-      patients: [...s.patients, editedPatient],
+      patients: [...s.patients, patientWithClinical],
       currentPatient: null,
-      currentImage: null,
-      lastAdded: editedPatient,
+      lastAdded: patientWithClinical,
+    }))
+    setScreen(SCREENS.SUCCESS)
+  }
+
+  async function handleClinicalSkip(patient) {
+    await dbAppendPatient(patient, session.date)
+    setSession((s) => ({
+      ...s,
+      patients: [...s.patients, patient],
+      currentPatient: null,
+      lastAdded: patient,
     }))
     setScreen(SCREENS.SUCCESS)
   }
@@ -287,6 +304,16 @@ export default function App() {
           onExport={handleExportFromRegistry}
           exporting={exporting}
           onDelete={handleDeletePatient}
+        />
+      )
+
+    case SCREENS.CLINICAL_DATA:
+      return (
+        <ClinicalData
+          patient={session.currentPatient}
+          date={session.date}
+          onSave={handleClinicalSave}
+          onSkip={handleClinicalSkip}
         />
       )
 

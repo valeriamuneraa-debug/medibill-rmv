@@ -23,13 +23,22 @@ function formatDate(isoDate) {
   return `${day} de ${months[month - 1]} de ${year}`
 }
 
+const TIPO_DOC_OPTIONS = [
+  'Cédula de ciudadanía',
+  'Cédula de extranjería',
+  'Documento de identificación extranjero',
+  'NIT',
+  'NIT de otro país',
+]
+
 const FIELDS = [
-  { key: 'nombre',    label: 'Nombre completo',         type: 'text',  inputMode: 'text' },
-  { key: 'id',        label: 'Número de documento',      type: 'text',  inputMode: 'numeric' },
-  { key: 'edad',      label: 'Edad',                     type: 'text',  inputMode: 'numeric' },
-  { key: 'telefono',  label: 'Teléfono',                 type: 'tel',   inputMode: 'tel' },
-  { key: 'direccion', label: 'Dirección',                type: 'text',  inputMode: 'text' },
-  { key: 'email',     label: 'Correo electrónico',       type: 'email', inputMode: 'email' },
+  { key: 'nombre',    label: 'Nombre completo',          type: 'text',   inputMode: 'text' },
+  { key: 'tipoDoc',   label: 'Tipo de documento',        type: 'select', options: TIPO_DOC_OPTIONS },
+  { key: 'id',        label: 'Número de documento',      type: 'text',   inputMode: 'numeric' },
+  { key: 'edad',      label: 'Edad',                     type: 'text',   inputMode: 'numeric' },
+  { key: 'telefono',  label: 'Teléfono',                 type: 'tel',    inputMode: 'tel' },
+  { key: 'direccion', label: 'Dirección',                type: 'text',   inputMode: 'text' },
+  { key: 'email',     label: 'Correo electrónico',       type: 'email',  inputMode: 'email' },
 ]
 
 function isValidId(v) { return /^\d+$/.test(v.trim()) }
@@ -39,6 +48,7 @@ function isValidEmail(v) { return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v.trim()) }
 export default function Review({ date, patient, image, onBack, onConfirm }) {
   const [formData, setFormData] = useState(() => ({
     nombre:    String(patient?.nombre    ?? ''),
+    tipoDoc:   String(patient?.tipoDoc   ?? 'Cédula de ciudadanía'),
     id:        String(patient?.id        ?? ''),
     edad:      String(patient?.edad      ?? ''),
     telefono:  String(patient?.telefono  ?? ''),
@@ -247,9 +257,10 @@ export default function Review({ date, patient, image, onBack, onConfirm }) {
 
           {/* ── Fields ── */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-            {FIELDS.map(({ key, label, type, inputMode }) => {
-              const warning = warningText(key)
-              const fmtErr = formatError(key)
+            {FIELDS.map(({ key, label, type, inputMode, options }) => {
+              const isSelect = type === 'select'
+              const warning  = !isSelect ? warningText(key) : null
+              const fmtErr   = !isSelect ? formatError(key)  : null
               return (
                 <div key={key} style={{ display: 'flex', flexDirection: 'column', gap: '5px' }}>
                   <label
@@ -263,17 +274,47 @@ export default function Review({ date, patient, image, onBack, onConfirm }) {
                   >
                     {label}
                   </label>
-                  <input
-                    id={`field-${key}`}
-                    type={type}
-                    inputMode={inputMode}
-                    value={formData[key]}
-                    onChange={(e) => update(key, e.target.value)}
-                    onFocus={() => setFocusedField(key)}
-                    onBlur={() => setFocusedField(null)}
-                    autoComplete="off"
-                    style={inputStyle(key)}
-                  />
+                  {isSelect ? (
+                    <select
+                      id={`field-${key}`}
+                      value={formData[key]}
+                      onChange={(e) => update(key, e.target.value)}
+                      style={{
+                        fontFamily: 'Outfit, sans-serif',
+                        fontSize: '16px',
+                        fontWeight: 400,
+                        color: '#ffffff',
+                        background: 'rgba(255,255,255,0.07)',
+                        border: '1.5px solid rgba(255,255,255,0.18)',
+                        borderRadius: '12px',
+                        padding: '14px 16px',
+                        minHeight: '52px',
+                        width: '100%',
+                        boxSizing: 'border-box',
+                        outline: 'none',
+                        cursor: 'pointer',
+                        touchAction: 'manipulation',
+                      }}
+                    >
+                      {options.map(opt => (
+                        <option key={opt} value={opt} style={{ background: '#172137', color: '#ffffff' }}>
+                          {opt}
+                        </option>
+                      ))}
+                    </select>
+                  ) : (
+                    <input
+                      id={`field-${key}`}
+                      type={type}
+                      inputMode={inputMode}
+                      value={formData[key]}
+                      onChange={(e) => update(key, e.target.value)}
+                      onFocus={() => setFocusedField(key)}
+                      onBlur={() => setFocusedField(null)}
+                      autoComplete="off"
+                      style={inputStyle(key)}
+                    />
+                  )}
                   {/* Format error takes priority over confidence warning */}
                   {fmtErr ? (
                     <span

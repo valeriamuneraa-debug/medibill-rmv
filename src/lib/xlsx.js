@@ -39,10 +39,14 @@ function dateSerial(isoDate) {
 function findAppendRow(ws) {
   if (!ws['!ref']) return 1
   const range = XLSX.utils.decode_range(ws['!ref'])
+  const isRealPatient = (val) =>
+    val != null &&
+    String(val).trim() !== '' &&
+    String(val).toLowerCase() !== 'nombre'
   let lastDataRow = 0
   for (let r = 0; r <= range.e.r; r++) {
     const cell = ws[XLSX.utils.encode_cell({ r, c: COL.NOMBRE })]
-    if (cell && cell.v != null && String(cell.v).trim() !== '') {
+    if (cell && isRealPatient(cell.v)) {
       lastDataRow = r
     }
   }
@@ -88,7 +92,7 @@ function buildResumen(wb) {
     }
     ws[`C${row}`] = {
       v: 0, t: 'n',
-      f: `SUMPRODUCT((MONTH('Hoja 1'!$B$2:$B$1011)=${m})*(YEAR('Hoja 1'!$B$2:$B$1011)=2026)*('Hoja 1'!$A$2:$A$1011<>""))`,
+      f: `SUMPRODUCT((MONTH('Hoja 1'!$B$2:$B$1011)=${m})*(YEAR('Hoja 1'!$B$2:$B$1011)=2026)*(LEN('Hoja 1'!$A$2:$A$1011)>6))`,
     }
   }
 
@@ -146,10 +150,25 @@ export async function appendPatient(patient, dateStr) {
   setCell(ws, row, COL.TELEFONO,  String(patient.telefono  ?? ''),      's')
   setCell(ws, row, COL.DIRECCION, patient.direccion ?? '',              's')
   setCell(ws, row, COL.EMAIL,     patient.email     ?? '',              's')
-  setCell(ws, row, COL.TIPO_DOC,  'Cédula de ciudadanía',               's')
-  setCell(ws, row, COL.GENERO,    'Femenino',                           's')
-  // Billing columns left truly empty so SUMPRODUCT formulas in Resumen
-  // treat them as 0 (not as error-causing empty strings).
+  setCell(ws, row, COL.TIPO_DOC,  patient.tipoDoc || 'Cédula de ciudadanía', 's')
+  setCell(ws, row, COL.GENERO,    'Femenino',                               's')
+
+  // Save optional clinical fields when provided (from ClinicalData screen)
+  if (patient.procedimiento) setCell(ws, row, COL.PROCEDIMIENTO, String(patient.procedimiento), 's')
+  if (patient.clinica)       setCell(ws, row, COL.CLINICA,       String(patient.clinica),       's')
+  if (patient.implantes)     setCell(ws, row, COL.IMPLANTES,     String(patient.implantes),     's')
+  if (patient.presupuesto != null && patient.presupuesto !== '') {
+    const n = Number(patient.presupuesto); if (!isNaN(n) && n !== 0) setCell(ws, row, COL.PRESUPUESTO, n, 'n', '"$"#,##0')
+  }
+  if (patient.instrum != null && patient.instrum !== '') {
+    const n = Number(patient.instrum); if (!isNaN(n) && n !== 0) setCell(ws, row, COL.INSTRUM, n, 'n')
+  }
+  if (patient.tiempo != null && patient.tiempo !== '') {
+    const n = Number(patient.tiempo); if (!isNaN(n) && n !== 0) setCell(ws, row, COL.TIEMPO, n, 'n')
+  }
+  if (patient.facturaDian != null && patient.facturaDian !== '') {
+    const n = Number(patient.facturaDian); if (!isNaN(n) && n !== 0) setCell(ws, row, COL.FACTURA_DIAN, n, 'n', '"$"#,##0')
+  }
 
   expandRef(ws, row)
   buildResumen(wb)
@@ -162,6 +181,10 @@ export async function downloadWorkbook(dateStr) {
   if (!b64) throw new Error('No hay plantilla guardada')
 
   const wb = XLSX.read(b64, { type: 'base64' })
+  if (wb.SheetNames.includes('Hoja 2')) {
+    delete wb.Sheets['Hoja 2']
+    wb.SheetNames = wb.SheetNames.filter(n => n !== 'Hoja 2')
+  }
   buildResumen(wb)  // Always regenerate before export
 
   const effectiveDate = dateStr || new Date().toISOString().split('T')[0]
@@ -193,6 +216,12 @@ export async function readPatients() {
       _row:          r,
       nombre:        String(get(COL.NOMBRE)        ?? ''),
       id:            get(COL.ID),
+      edad:          get(COL.EDAD),
+      telefono:      String(get(COL.TELEFONO)       ?? ''),
+      direccion:     String(get(COL.DIRECCION)      ?? ''),
+      email:         String(get(COL.EMAIL)          ?? ''),
+      tipoDoc:       String(get(COL.TIPO_DOC)       ?? 'Cédula de ciudadanía'),
+      genero:        String(get(COL.GENERO)         ?? 'Femenino'),
       fecha:         get(COL.FECHA),
       procedimiento: String(get(COL.PROCEDIMIENTO) ?? ''),
       presupuesto:   get(COL.PRESUPUESTO),
