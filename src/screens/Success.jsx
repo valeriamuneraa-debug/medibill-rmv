@@ -1,3 +1,8 @@
+import { useEffect, useState } from 'react'
+
+// ── Replace with your extension's ID after sideloading (see extension/INSTALL.md) ──
+const EXTENSION_ID = 'YOUR_EXTENSION_ID_HERE'
+
 function formatDate(isoDate) {
   if (!isoDate) return ''
   const [year, month, day] = isoDate.split('-').map(Number)
@@ -26,8 +31,91 @@ function ExportIcon() {
   )
 }
 
+function EmisionIcon() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 18 18" fill="none" aria-hidden="true">
+      <path d="M3 9h12M11 5l4 4-4 4" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  )
+}
+
+async function sendToEmision(patientData) {
+  // Try the extension's externally_connectable channel first.
+  if (
+    EXTENSION_ID !== 'YOUR_EXTENSION_ID_HERE' &&
+    typeof chrome !== 'undefined' &&
+    chrome.runtime?.sendMessage
+  ) {
+    return new Promise((resolve) => {
+      try {
+        chrome.runtime.sendMessage(
+          EXTENSION_ID,
+          { type: 'ADD_TO_QUEUE', patient: patientData },
+          (response) => {
+            if (chrome.runtime.lastError || !response?.ok) {
+              // Extension present but message failed — fall through to clipboard
+              navigator.clipboard.writeText(JSON.stringify(patientData, null, 2))
+                .then(() => resolve('copied'))
+                .catch(() => resolve('error'))
+            } else {
+              resolve('sent')
+            }
+          }
+        )
+      } catch {
+        navigator.clipboard.writeText(JSON.stringify(patientData, null, 2))
+          .then(() => resolve('copied'))
+          .catch(() => resolve('error'))
+      }
+    })
+  }
+
+  // Fallback: clipboard
+  try {
+    await navigator.clipboard.writeText(JSON.stringify(patientData, null, 2))
+    return 'copied'
+  } catch {
+    return 'error'
+  }
+}
+
+const TOAST_MESSAGES = {
+  sent:   'Agregado a la cola de e-Misión',
+  copied: 'Datos copiados — pégalos en la extensión',
+  error:  'No se pudo enviar — verifica la extensión',
+}
+
 export default function Success({ patient, date, onAddAnother, onExport, onNewSession, exporting }) {
   const nombre = (patient?.nombre ?? '').trim() || 'Paciente'
+
+  const [sending, setSending] = useState(false)
+  const [toast, setToast]     = useState(null) // 'sent' | 'copied' | 'error' | null
+
+  // Auto-dismiss toast after 4 seconds
+  useEffect(() => {
+    if (!toast) return
+    const t = setTimeout(() => setToast(null), 4000)
+    return () => clearTimeout(t)
+  }, [toast])
+
+  async function handleSendToEmision() {
+    if (sending) return
+    setSending(true)
+    const patientData = {
+      nombre:    patient?.nombre    ?? '',
+      id:        patient?.id    != null ? String(patient.id)    : '',
+      edad:      patient?.edad  != null ? String(patient.edad)  : '',
+      telefono:  patient?.telefono  ?? '',
+      direccion: patient?.direccion ?? '',
+      email:     patient?.email     ?? '',
+      tipoDoc:   'Cédula de ciudadanía',
+      genero:    'Femenino',
+      fecha:     date ?? '',
+    }
+    const result = await sendToEmision(patientData)
+    setSending(false)
+    setToast(result)
+  }
 
   return (
     <div
@@ -75,7 +163,7 @@ export default function Success({ patient, date, onAddAnother, onExport, onNewSe
           gap: '44px',
         }}
       >
-        {/* Checkmark + patient name + date */}
+        {/* Checkmark + patient name */}
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '22px' }}>
           <CheckIcon />
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px' }}>
@@ -133,7 +221,64 @@ export default function Success({ patient, date, onAddAnother, onExport, onNewSe
             Agregar otro paciente
           </button>
 
-          {/* Secondary — export */}
+          {/* Secondary — send to emisión */}
+          <button
+            onClick={handleSendToEmision}
+            disabled={sending}
+            aria-disabled={sending}
+            aria-busy={sending}
+            style={{
+              fontFamily: 'Outfit, sans-serif',
+              fontSize: '17px',
+              fontWeight: 500,
+              color: sending ? 'rgba(255,255,255,0.4)' : '#ffffff',
+              background: 'none',
+              border: '1.5px solid rgba(255,255,255,0.35)',
+              borderRadius: '12px',
+              padding: '18px 20px',
+              width: '100%',
+              minHeight: '64px',
+              cursor: sending ? 'default' : 'pointer',
+              touchAction: 'manipulation',
+              transition: 'border-color 150ms ease, color 150ms ease, transform 100ms ease',
+              letterSpacing: '0.02em',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '10px',
+            }}
+            onMouseEnter={(e) => { if (!sending) e.currentTarget.style.borderColor = 'rgba(255,255,255,0.65)' }}
+            onMouseLeave={(e) => { e.currentTarget.style.borderColor = 'rgba(255,255,255,0.35)'; e.currentTarget.style.transform = 'scale(1)' }}
+            onMouseDown={(e) => { if (!sending) e.currentTarget.style.transform = 'scale(0.98)' }}
+            onMouseUp={(e) => { e.currentTarget.style.transform = 'scale(1)' }}
+            onTouchStart={(e) => { if (!sending) e.currentTarget.style.transform = 'scale(0.98)' }}
+            onTouchEnd={(e) => { e.currentTarget.style.transform = 'scale(1)' }}
+          >
+            {sending ? (
+              <>
+                <div
+                  className="animate-spin"
+                  style={{
+                    width: '18px',
+                    height: '18px',
+                    border: '2px solid rgba(255,255,255,0.2)',
+                    borderTopColor: 'rgba(255,255,255,0.6)',
+                    borderRadius: '50%',
+                    flexShrink: 0,
+                  }}
+                  aria-hidden="true"
+                />
+                Enviando...
+              </>
+            ) : (
+              <>
+                <EmisionIcon />
+                Enviar a emisión
+              </>
+            )}
+          </button>
+
+          {/* Tertiary — export */}
           <button
             onClick={onExport}
             disabled={exporting}
@@ -145,7 +290,7 @@ export default function Success({ patient, date, onAddAnother, onExport, onNewSe
               fontWeight: 500,
               color: exporting ? 'rgba(255,255,255,0.4)' : '#ffffff',
               background: 'none',
-              border: '1.5px solid rgba(255,255,255,0.35)',
+              border: '1.5px solid rgba(255,255,255,0.22)',
               borderRadius: '12px',
               padding: '18px 20px',
               width: '100%',
@@ -159,8 +304,8 @@ export default function Success({ patient, date, onAddAnother, onExport, onNewSe
               justifyContent: 'center',
               gap: '10px',
             }}
-            onMouseEnter={(e) => { if (!exporting) e.currentTarget.style.borderColor = 'rgba(255,255,255,0.65)' }}
-            onMouseLeave={(e) => { e.currentTarget.style.borderColor = 'rgba(255,255,255,0.35)'; e.currentTarget.style.transform = 'scale(1)' }}
+            onMouseEnter={(e) => { if (!exporting) e.currentTarget.style.borderColor = 'rgba(255,255,255,0.45)' }}
+            onMouseLeave={(e) => { e.currentTarget.style.borderColor = 'rgba(255,255,255,0.22)'; e.currentTarget.style.transform = 'scale(1)' }}
             onMouseDown={(e) => { if (!exporting) e.currentTarget.style.transform = 'scale(0.98)' }}
             onMouseUp={(e) => { e.currentTarget.style.transform = 'scale(1)' }}
             onTouchStart={(e) => { if (!exporting) e.currentTarget.style.transform = 'scale(0.98)' }}
@@ -190,7 +335,7 @@ export default function Success({ patient, date, onAddAnother, onExport, onNewSe
             )}
           </button>
 
-          {/* Tertiary — new session */}
+          {/* Quaternary — new session */}
           <button
             onClick={onNewSession}
             style={{
@@ -218,6 +363,36 @@ export default function Success({ patient, date, onAddAnother, onExport, onNewSe
 
         </div>
       </main>
+
+      {/* Toast — aria-live for screen readers, auto-dismisses */}
+      {toast && (
+        <div
+          role="status"
+          aria-live="polite"
+          style={{
+            position: 'fixed',
+            bottom: '24px',
+            left: '50%',
+            transform: 'translateX(-50%)',
+            background: 'rgba(255,255,255,0.12)',
+            backdropFilter: 'blur(8px)',
+            WebkitBackdropFilter: 'blur(8px)',
+            border: '1px solid rgba(255,255,255,0.2)',
+            borderRadius: '10px',
+            padding: '12px 20px',
+            fontFamily: 'Outfit, sans-serif',
+            fontSize: '14px',
+            fontWeight: 500,
+            color: '#ffffff',
+            whiteSpace: 'nowrap',
+            zIndex: 100,
+            letterSpacing: '0.01em',
+            pointerEvents: 'none',
+          }}
+        >
+          {TOAST_MESSAGES[toast]}
+        </div>
+      )}
     </div>
   )
 }

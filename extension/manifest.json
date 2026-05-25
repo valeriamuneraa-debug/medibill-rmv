@@ -1,18 +1,25 @@
 {
   "manifest_version": 3,
-  "name": "MediBill RMV",
-  "version": "1.0.0",
-  "description": "Captura rápida de pacientes para el Dr. Rodrigo Múnera Vélez",
+  "name": "MediBill RMV — Emisión Autofill",
+  "version": "1.0",
+  "description": "Completa automáticamente el formulario de clientes en e-Misión",
+  "permissions": ["storage", "activeTab", "scripting", "tabs"],
+  "host_permissions": ["https://facturador.emision.co/*"],
+  "externally_connectable": {
+    "matches": ["https://medibill-rmv.vercel.app/*"]
+  },
   "action": {
     "default_popup": "popup.html",
     "default_title": "MediBill RMV"
   },
-  "permissions": ["activeTab", "scripting"],
   "content_scripts": [
     {
-      "matches": ["<all_urls>"],
+      "matches": ["https://facturador.emision.co/*"],
       "js": ["content.js"],
       "run_at": "document_idle"
     }
-  ]
+  ],
+  "background": {
+    "service_worker": "background.js"
+  }
 }
