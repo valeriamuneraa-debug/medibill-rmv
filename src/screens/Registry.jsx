@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { readPatients } from '../lib/xlsx.js'
+import { readPatients, bulkDeletePatients } from '../lib/xlsx.js'
 
 const EXTENSION_ID = 'ojjbjnbminciinjlfmgmggccjebafjap'
 
@@ -66,11 +66,48 @@ function formatPeso(v) {
   return '$' + n.toLocaleString('es-CO')
 }
 
+function toEmisionPayload(p) {
+  return {
+    nombre:    p.nombre    ?? '',
+    id:        p.id != null ? String(p.id) : '',
+    edad:      p.edad != null ? String(p.edad) : '',
+    telefono:  p.telefono  ?? '',
+    direccion: p.direccion ?? '',
+    email:     p.email     ?? '',
+    tipoDoc:   p.tipoDoc   ?? 'Cédula de ciudadanía',
+    genero:    p.genero    ?? 'Femenino',
+    fecha:     '',
+  }
+}
+
 function ExportIcon() {
   return (
     <svg width="18" height="18" viewBox="0 0 18 18" fill="none" aria-hidden="true">
       <path d="M3 12v2a1 1 0 001 1h10a1 1 0 001-1v-2" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" />
       <path d="M9 3v8M6 8l3 3 3-3" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  )
+}
+
+function Checkbox({ checked }) {
+  return (
+    <svg width="22" height="22" viewBox="0 0 22 22" fill="none" aria-hidden="true" style={{ flexShrink: 0 }}>
+      <circle
+        cx="11" cy="11" r="10"
+        stroke={checked ? '#ffffff' : 'rgba(255,255,255,0.38)'}
+        strokeWidth="1.5"
+        fill={checked ? '#ffffff' : 'transparent'}
+        style={{ transition: 'fill 150ms ease, stroke 150ms ease' }}
+      />
+      {checked && (
+        <path
+          d="M7 11.5l3 3 5-5.5"
+          stroke="#172137"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+      )}
     </svg>
   )
 }
@@ -104,58 +141,21 @@ export default function Registry({ onBack, onEditPatient, onExport, exporting, o
   const [bulkConfirm, setBulkConfirm]   = useState(false)
   const [bulkSending, setBulkSending]   = useState(false)
 
-  const longPressTimer  = useRef(null)
-  const longPressFired  = useRef(false)
+  // Selection mode
+  const [selectionMode, setSelectionMode]       = useState(false)
+  const [selectedIds, setSelectedIds]           = useState(new Set())
+  const [bulkDeleteConfirm, setBulkDeleteConfirm] = useState(false)
+  const [bulkDeleting, setBulkDeleting]         = useState(false)
+  const [bulkEmitting, setBulkEmitting]         = useState(false)
+
+  const longPressTimer = useRef(null)
+  const longPressFired = useRef(false)
 
   useEffect(() => {
     if (!emisionToast) return
     const t = setTimeout(() => setEmisionToast(null), 3500)
     return () => clearTimeout(t)
   }, [emisionToast])
-
-  async function handleEmision(e, patient) {
-    e.stopPropagation()
-    const patientData = {
-      nombre:    patient.nombre    ?? '',
-      id:        patient.id != null ? String(patient.id) : '',
-      edad:      patient.edad != null ? String(patient.edad) : '',
-      telefono:  patient.telefono  ?? '',
-      direccion: patient.direccion ?? '',
-      email:     patient.email     ?? '',
-      tipoDoc:   patient.tipoDoc   ?? 'Cédula de ciudadanía',
-      genero:    patient.genero    ?? 'Femenino',
-      fecha:     '',
-    }
-    const result = await sendToEmision(patientData)
-    setEmisionToast(EMISION_TOAST[result])
-  }
-
-  async function handleBulkEmision() {
-    if (!patients?.length || bulkSending) return
-    setBulkSending(true)
-    setBulkConfirm(false)
-    try {
-      const allPatients = patients.map(p => ({
-        nombre:    p.nombre    ?? '',
-        id:        p.id != null ? String(p.id) : '',
-        edad:      p.edad != null ? String(p.edad) : '',
-        telefono:  p.telefono  ?? '',
-        direccion: p.direccion ?? '',
-        email:     p.email     ?? '',
-        tipoDoc:   p.tipoDoc   ?? 'Cédula de ciudadanía',
-        genero:    p.genero    ?? 'Femenino',
-        fecha:     '',
-      }))
-      const result = await sendBatchToEmision(allPatients)
-      setEmisionToast(
-        result === 'sent'
-          ? `${allPatients.length} paciente${allPatients.length !== 1 ? 's' : ''} enviado${allPatients.length !== 1 ? 's' : ''} a la cola`
-          : EMISION_TOAST.error
-      )
-    } finally {
-      setBulkSending(false)
-    }
-  }
 
   useEffect(() => {
     readPatients()
@@ -165,98 +165,290 @@ export default function Registry({ onBack, onEditPatient, onExport, exporting, o
       .catch(() => setPatients([]))
   }, [])
 
+  // ── Selection mode ────────────────────────────────────────────────────────
+
+  function enterSelectionMode(patient) {
+    setSelectionMode(true)
+    setSelectedIds(new Set([patient._row]))
+  }
+
+  function exitSelectionMode() {
+    setSelectionMode(false)
+    setSelectedIds(new Set())
+    setBulkDeleteConfirm(false)
+  }
+
+  function toggleSelect(patient) {
+    setSelectedIds(prev => {
+      const next = new Set(prev)
+      if (next.has(patient._row)) { next.delete(patient._row) } else { next.add(patient._row) }
+      return next
+    })
+  }
+
+  const allSelected = !!(patients?.length > 0 && selectedIds.size === patients.length)
+
+  function toggleSelectAll() {
+    if (allSelected) {
+      setSelectedIds(new Set())
+    } else {
+      setSelectedIds(new Set(patients.map(p => p._row)))
+    }
+  }
+
+  // ── Long press ────────────────────────────────────────────────────────────
+
   function startLongPress(patient) {
     longPressFired.current = false
     longPressTimer.current = setTimeout(() => {
       longPressFired.current = true
-      setDeleteTarget(patient)
+      if (!selectionMode) enterSelectionMode(patient)
     }, 500)
   }
 
-  function cancelLongPress() {
-    clearTimeout(longPressTimer.current)
-  }
+  function cancelLongPress() { clearTimeout(longPressTimer.current) }
 
   function handleRowClick(patient) {
     if (longPressFired.current) return
-    onEditPatient(patient)
+    if (selectionMode) {
+      toggleSelect(patient)
+    } else {
+      onEditPatient(patient)
+    }
   }
+
+  // ── Individual delete (context-menu / desktop) ────────────────────────────
 
   async function handleDelete() {
     if (deleting || !deleteTarget) return
     setDeleting(true)
+    try { await onDelete(deleteTarget.id) }
+    finally { setDeleting(false); setDeleteTarget(null) }
+  }
+
+  // ── Per-row emisión ───────────────────────────────────────────────────────
+
+  async function handleEmision(e, patient) {
+    e.stopPropagation()
+    const result = await sendToEmision(toEmisionPayload(patient))
+    setEmisionToast(EMISION_TOAST[result])
+  }
+
+  // ── Bulk send (all patients, from normal-mode footer) ─────────────────────
+
+  async function handleBulkEmision() {
+    if (!patients?.length || bulkSending) return
+    setBulkSending(true)
+    setBulkConfirm(false)
     try {
-      await onDelete(deleteTarget.id)
+      const result = await sendBatchToEmision(patients.map(toEmisionPayload))
+      const n = patients.length
+      setEmisionToast(
+        result === 'sent'
+          ? `${n} paciente${n !== 1 ? 's' : ''} enviado${n !== 1 ? 's' : ''} a la cola`
+          : EMISION_TOAST.error
+      )
     } finally {
-      setDeleting(false)
-      setDeleteTarget(null)
+      setBulkSending(false)
     }
   }
 
+  // ── Bulk emisión (selected, from selection-mode action bar) ───────────────
+
+  async function handleBulkEmisionSelected() {
+    if (!selectedIds.size || bulkEmitting) return
+    setBulkEmitting(true)
+    try {
+      const sel = patients.filter(p => selectedIds.has(p._row))
+      const result = await sendBatchToEmision(sel.map(toEmisionPayload))
+      const n = sel.length
+      setEmisionToast(
+        result === 'sent'
+          ? `${n} paciente${n !== 1 ? 's' : ''} enviado${n !== 1 ? 's' : ''} a emisión`
+          : EMISION_TOAST.error
+      )
+      exitSelectionMode()
+    } finally {
+      setBulkEmitting(false)
+    }
+  }
+
+  // ── Bulk delete ───────────────────────────────────────────────────────────
+
+  async function handleBulkDelete() {
+    if (!selectedIds.size || bulkDeleting) return
+    setBulkDeleting(true)
+    setBulkDeleteConfirm(false)
+    try {
+      const sel = patients.filter(p => selectedIds.has(p._row))
+      const ids = sel.map(p => p.id).filter(id => id != null)
+      await bulkDeletePatients(ids)
+      const n = sel.length
+      const updated = await readPatients()
+      setPatients(updated.filter(p => p.nombre && p.nombre.trim() !== '' && p.nombre !== 'Nombre'))
+      setEmisionToast(`${n} paciente${n !== 1 ? 's' : ''} eliminado${n !== 1 ? 's' : ''}`)
+      exitSelectionMode()
+    } finally {
+      setBulkDeleting(false)
+    }
+  }
+
+  // ── Row press feedback ────────────────────────────────────────────────────
+
   const rowPress   = (e) => { e.currentTarget.style.background = 'rgba(255,255,255,0.06)' }
-  const rowRelease = (e) => { e.currentTarget.style.background = 'transparent' }
+  const rowRelease = (e) => {
+    const row = e.currentTarget
+    // Keep selected highlight if in selection mode and this row is selected
+    const rowKey = Number(row.dataset.rowKey)
+    if (selectionMode && selectedIds.has(rowKey)) {
+      row.style.background = 'rgba(255,255,255,0.08)'
+    } else {
+      row.style.background = 'transparent'
+    }
+  }
+
+  // ── Render ────────────────────────────────────────────────────────────────
+
+  const selectedCount = selectedIds.size
 
   return (
     <div
       className="min-h-dvh flex flex-col"
       style={{ background: '#172137', fontFamily: 'Outfit, sans-serif', color: '#ffffff' }}
     >
-      {/* Header */}
-      <header style={{ display: 'flex', alignItems: 'center', padding: '16px 20px 12px', flexShrink: 0 }}>
-        <button
-          onClick={onBack}
-          aria-label="Volver"
-          style={{
-            fontFamily: 'Outfit, sans-serif',
-            fontSize: '22px',
-            color: '#ffffff',
-            background: 'none',
-            border: 'none',
-            cursor: 'pointer',
-            width: '44px',
-            minHeight: '64px',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'flex-start',
-            padding: 0,
-            opacity: 0.8,
-            flexShrink: 0,
-            touchAction: 'manipulation',
-            transition: 'opacity 150ms ease, transform 100ms ease',
-          }}
-          onMouseEnter={(e) => { e.currentTarget.style.opacity = '1' }}
-          onMouseLeave={(e) => { e.currentTarget.style.opacity = '0.8'; e.currentTarget.style.transform = 'scale(1)' }}
-          onMouseDown={(e) => { e.currentTarget.style.transform = 'scale(0.9)' }}
-          onMouseUp={(e) => { e.currentTarget.style.transform = 'scale(1)' }}
-          onTouchStart={(e) => { e.currentTarget.style.transform = 'scale(0.9)' }}
-          onTouchEnd={(e) => { e.currentTarget.style.transform = 'scale(1)' }}
-        >
-          ←
-        </button>
+      {/* ── Header ── */}
+      <header style={{ display: 'flex', alignItems: 'center', padding: '16px 20px 12px', flexShrink: 0, minHeight: '72px' }}>
+        {selectionMode ? (
+          <>
+            {/* Cancel */}
+            <button
+              onClick={exitSelectionMode}
+              aria-label="Cancelar selección"
+              style={{
+                fontFamily: 'Outfit, sans-serif',
+                fontSize: '15px',
+                fontWeight: 500,
+                color: 'rgba(255,255,255,0.75)',
+                background: 'none',
+                border: 'none',
+                cursor: 'pointer',
+                padding: '8px 0',
+                minHeight: '44px',
+                minWidth: '72px',
+                touchAction: 'manipulation',
+                transition: 'color 150ms ease',
+                flexShrink: 0,
+                textAlign: 'left',
+              }}
+              onMouseEnter={(e) => { e.currentTarget.style.color = '#ffffff' }}
+              onMouseLeave={(e) => { e.currentTarget.style.color = 'rgba(255,255,255,0.75)' }}
+            >
+              ✕ Cancelar
+            </button>
 
-        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '5px' }}>
-          <span
-            style={{
-              fontSize: 'clamp(26px, 8vw, 38px)',
-              fontWeight: 700,
-              letterSpacing: '0.22em',
-              lineHeight: 1,
-              userSelect: 'none',
-            }}
-            aria-label="Iniciales: R M V"
-          >
-            RMV
-          </span>
-          <span style={{ fontSize: '12px', fontWeight: 400, letterSpacing: '0.04em', color: 'rgba(255,255,255,0.45)' }}>
-            Registro de pacientes
-          </span>
-        </div>
+            {/* Count */}
+            <div
+              role="status"
+              aria-live="polite"
+              aria-atomic="true"
+              style={{ flex: 1, textAlign: 'center', fontSize: '16px', fontWeight: 600, letterSpacing: '0.01em' }}
+            >
+              {selectedCount} seleccionado{selectedCount !== 1 ? 's' : ''}
+            </div>
 
-        <div style={{ width: '44px', flexShrink: 0 }} aria-hidden="true" />
+            {/* Select all toggle */}
+            <button
+              onClick={toggleSelectAll}
+              style={{
+                fontFamily: 'Outfit, sans-serif',
+                fontSize: '13px',
+                fontWeight: 500,
+                color: 'rgba(255,255,255,0.65)',
+                background: 'none',
+                border: 'none',
+                cursor: 'pointer',
+                padding: '8px 0',
+                minHeight: '44px',
+                minWidth: '72px',
+                touchAction: 'manipulation',
+                transition: 'color 150ms ease',
+                flexShrink: 0,
+                textAlign: 'right',
+                whiteSpace: 'nowrap',
+              }}
+              onMouseEnter={(e) => { e.currentTarget.style.color = '#ffffff' }}
+              onMouseLeave={(e) => { e.currentTarget.style.color = 'rgba(255,255,255,0.65)' }}
+            >
+              {allSelected ? 'Deseleccionar todo' : 'Seleccionar todo'}
+            </button>
+          </>
+        ) : (
+          <>
+            {/* Back */}
+            <button
+              onClick={onBack}
+              aria-label="Volver"
+              style={{
+                fontFamily: 'Outfit, sans-serif',
+                fontSize: '22px',
+                color: '#ffffff',
+                background: 'none',
+                border: 'none',
+                cursor: 'pointer',
+                width: '44px',
+                minHeight: '64px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'flex-start',
+                padding: 0,
+                opacity: 0.8,
+                flexShrink: 0,
+                touchAction: 'manipulation',
+                transition: 'opacity 150ms ease, transform 100ms ease',
+              }}
+              onMouseEnter={(e) => { e.currentTarget.style.opacity = '1' }}
+              onMouseLeave={(e) => { e.currentTarget.style.opacity = '0.8'; e.currentTarget.style.transform = 'scale(1)' }}
+              onMouseDown={(e) => { e.currentTarget.style.transform = 'scale(0.9)' }}
+              onMouseUp={(e) => { e.currentTarget.style.transform = 'scale(1)' }}
+              onTouchStart={(e) => { e.currentTarget.style.transform = 'scale(0.9)' }}
+              onTouchEnd={(e) => { e.currentTarget.style.transform = 'scale(1)' }}
+            >
+              ←
+            </button>
+
+            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '5px' }}>
+              <span
+                style={{
+                  fontSize: 'clamp(26px, 8vw, 38px)',
+                  fontWeight: 700,
+                  letterSpacing: '0.22em',
+                  lineHeight: 1,
+                  userSelect: 'none',
+                }}
+                aria-label="Iniciales: R M V"
+              >
+                RMV
+              </span>
+              <span style={{ fontSize: '12px', fontWeight: 400, letterSpacing: '0.04em', color: 'rgba(255,255,255,0.45)' }}>
+                Registro de pacientes
+              </span>
+            </div>
+
+            <div style={{ width: '44px', flexShrink: 0 }} aria-hidden="true" />
+          </>
+        )}
       </header>
 
-      {/* Scrollable content */}
-      <main style={{ flex: 1, overflowY: 'auto', WebkitOverflowScrolling: 'touch' }}>
+      {/* ── Main content ── */}
+      <main
+        style={{
+          flex: 1,
+          overflowY: 'auto',
+          WebkitOverflowScrolling: 'touch',
+          paddingBottom: selectionMode ? '96px' : 0,
+          transition: 'padding-bottom 200ms ease',
+        }}
+      >
         {patients === null ? (
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '80px 24px' }}>
             <div
@@ -297,137 +489,193 @@ export default function Registry({ onBack, onEditPatient, onExport, exporting, o
               margin: '8px 0 0',
               letterSpacing: '0.01em',
             }}>
-              Mantén presionado para eliminar un paciente
+              {selectionMode
+                ? 'Toca filas para seleccionar o deseleccionar'
+                : 'Mantén presionado para seleccionar varios'}
             </p>
             <div style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
-              <table style={{ borderCollapse: 'collapse', width: '100%', minWidth: '660px' }}>
+              <table style={{
+                borderCollapse: 'collapse',
+                width: '100%',
+                minWidth: selectionMode ? '560px' : '660px',
+              }}>
                 <thead>
                   <tr>
+                    {selectionMode && <TH width="44px" />}
                     <TH width="150px">Nombre</TH>
                     <TH width="72px">Fecha</TH>
                     <TH width="120px">Procedimiento</TH>
                     <TH width="105px" right>Factura Dian</TH>
                     <TH width="105px" right>Presupuesto</TH>
-                    <TH width="28px" />
-                    <TH width="88px" />
+                    {!selectionMode && <TH width="28px" />}
+                    {!selectionMode && <TH width="88px" />}
                   </tr>
                 </thead>
                 <tbody>
-                  {patients.map((p) => (
-                    <tr
-                      key={p._row}
-                      onClick={() => handleRowClick(p)}
-                      onTouchStart={() => startLongPress(p)}
-                      onTouchEnd={cancelLongPress}
-                      onTouchMove={cancelLongPress}
-                      onContextMenu={(e) => { e.preventDefault(); setDeleteTarget(p) }}
-                      style={{ cursor: 'pointer', transition: 'background 100ms ease' }}
-                      onMouseEnter={rowPress}
-                      onMouseLeave={rowRelease}
-                      onMouseDown={rowPress}
-                      onMouseUp={rowRelease}
-                    >
-                      <td style={{
-                        padding: '14px 12px',
-                        fontSize: '15px',
-                        fontWeight: 500,
-                        borderBottom: '1px solid rgba(255,255,255,0.07)',
-                        maxWidth: '150px',
-                        overflow: 'hidden',
-                        textOverflow: 'ellipsis',
-                        whiteSpace: 'nowrap',
-                      }}>
-                        {p.nombre || '—'}
-                      </td>
-                      <td style={{
-                        padding: '14px 12px',
-                        fontSize: '13px',
-                        color: 'rgba(255,255,255,0.6)',
-                        borderBottom: '1px solid rgba(255,255,255,0.07)',
-                        whiteSpace: 'nowrap',
-                      }}>
-                        {serialToDateStr(p.fecha)}
-                      </td>
-                      <td style={{
-                        padding: '14px 12px',
-                        fontSize: '13px',
-                        color: p.procedimiento ? '#ffffff' : 'rgba(255,255,255,0.25)',
-                        borderBottom: '1px solid rgba(255,255,255,0.07)',
-                        maxWidth: '120px',
-                        overflow: 'hidden',
-                        textOverflow: 'ellipsis',
-                        whiteSpace: 'nowrap',
-                      }}>
-                        {p.procedimiento || '—'}
-                      </td>
-                      <td style={{
-                        padding: '14px 12px',
-                        fontSize: '13px',
-                        textAlign: 'right',
-                        fontVariantNumeric: 'tabular-nums',
-                        color: p.facturaDian != null ? '#ffffff' : 'rgba(255,255,255,0.25)',
-                        borderBottom: '1px solid rgba(255,255,255,0.07)',
-                        whiteSpace: 'nowrap',
-                      }}>
-                        {formatPeso(p.facturaDian)}
-                      </td>
-                      <td style={{
-                        padding: '14px 12px',
-                        fontSize: '13px',
-                        textAlign: 'right',
-                        fontVariantNumeric: 'tabular-nums',
-                        color: p.presupuesto != null ? '#ffffff' : 'rgba(255,255,255,0.25)',
-                        borderBottom: '1px solid rgba(255,255,255,0.07)',
-                        whiteSpace: 'nowrap',
-                      }}>
-                        {formatPeso(p.presupuesto)}
-                      </td>
-                      <td style={{
-                        padding: '14px 8px 14px 4px',
-                        fontSize: '16px',
-                        color: 'rgba(255,255,255,0.28)',
-                        borderBottom: '1px solid rgba(255,255,255,0.07)',
-                        whiteSpace: 'nowrap',
-                        userSelect: 'none',
-                      }}>
-                        ›
-                      </td>
-                      <td
+                  {patients.map((p) => {
+                    const isSelected = selectedIds.has(p._row)
+                    return (
+                      <tr
+                        key={p._row}
+                        data-row-key={p._row}
+                        onClick={() => handleRowClick(p)}
+                        onTouchStart={() => startLongPress(p)}
+                        onTouchEnd={cancelLongPress}
+                        onTouchMove={cancelLongPress}
+                        onContextMenu={(e) => {
+                          e.preventDefault()
+                          if (!selectionMode) setDeleteTarget(p)
+                        }}
                         style={{
-                          padding: '8px 10px',
+                          cursor: 'pointer',
+                          background: isSelected ? 'rgba(255,255,255,0.08)' : 'transparent',
+                          transition: 'background 120ms ease',
+                        }}
+                        onMouseEnter={(e) => {
+                          if (!isSelected) e.currentTarget.style.background = 'rgba(255,255,255,0.05)'
+                        }}
+                        onMouseLeave={(e) => {
+                          e.currentTarget.style.background = isSelected ? 'rgba(255,255,255,0.08)' : 'transparent'
+                        }}
+                        onMouseDown={(e) => { e.currentTarget.style.background = 'rgba(255,255,255,0.1)' }}
+                        onMouseUp={(e) => {
+                          e.currentTarget.style.background = isSelected ? 'rgba(255,255,255,0.08)' : 'transparent'
+                        }}
+                      >
+                        {/* Checkbox cell (selection mode only) */}
+                        {selectionMode && (
+                          <td style={{
+                            padding: '0 4px 0 12px',
+                            borderBottom: '1px solid rgba(255,255,255,0.07)',
+                            verticalAlign: 'middle',
+                          }}>
+                            <div
+                              style={{
+                                width: '44px',
+                                height: '48px',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                              }}
+                              role="checkbox"
+                              aria-checked={isSelected}
+                              aria-label={`Seleccionar a ${p.nombre || 'paciente'}`}
+                            >
+                              <Checkbox checked={isSelected} />
+                            </div>
+                          </td>
+                        )}
+
+                        <td style={{
+                          padding: '14px 12px',
+                          fontSize: '15px',
+                          fontWeight: 500,
+                          borderBottom: '1px solid rgba(255,255,255,0.07)',
+                          maxWidth: '150px',
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis',
+                          whiteSpace: 'nowrap',
+                        }}>
+                          {p.nombre || '—'}
+                        </td>
+                        <td style={{
+                          padding: '14px 12px',
+                          fontSize: '13px',
+                          color: 'rgba(255,255,255,0.6)',
                           borderBottom: '1px solid rgba(255,255,255,0.07)',
                           whiteSpace: 'nowrap',
-                        }}
-                        onClick={(e) => e.stopPropagation()}
-                        onTouchStart={(e) => e.stopPropagation()}
-                        onContextMenu={(e) => e.stopPropagation()}
-                      >
-                        <button
-                          onClick={(e) => handleEmision(e, p)}
-                          style={{
-                            fontFamily: 'Outfit, sans-serif',
-                            fontSize: '11px',
-                            fontWeight: 500,
-                            color: 'rgba(255,255,255,0.65)',
-                            background: 'none',
-                            border: '1px solid rgba(255,255,255,0.2)',
-                            borderRadius: '8px',
-                            padding: '6px 10px',
-                            minHeight: '36px',
-                            cursor: 'pointer',
-                            touchAction: 'manipulation',
+                        }}>
+                          {serialToDateStr(p.fecha)}
+                        </td>
+                        <td style={{
+                          padding: '14px 12px',
+                          fontSize: '13px',
+                          color: p.procedimiento ? '#ffffff' : 'rgba(255,255,255,0.25)',
+                          borderBottom: '1px solid rgba(255,255,255,0.07)',
+                          maxWidth: '120px',
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis',
+                          whiteSpace: 'nowrap',
+                        }}>
+                          {p.procedimiento || '—'}
+                        </td>
+                        <td style={{
+                          padding: '14px 12px',
+                          fontSize: '13px',
+                          textAlign: 'right',
+                          fontVariantNumeric: 'tabular-nums',
+                          color: p.facturaDian != null ? '#ffffff' : 'rgba(255,255,255,0.25)',
+                          borderBottom: '1px solid rgba(255,255,255,0.07)',
+                          whiteSpace: 'nowrap',
+                        }}>
+                          {formatPeso(p.facturaDian)}
+                        </td>
+                        <td style={{
+                          padding: '14px 12px',
+                          fontSize: '13px',
+                          textAlign: 'right',
+                          fontVariantNumeric: 'tabular-nums',
+                          color: p.presupuesto != null ? '#ffffff' : 'rgba(255,255,255,0.25)',
+                          borderBottom: '1px solid rgba(255,255,255,0.07)',
+                          whiteSpace: 'nowrap',
+                        }}>
+                          {formatPeso(p.presupuesto)}
+                        </td>
+
+                        {/* Chevron (normal mode only) */}
+                        {!selectionMode && (
+                          <td style={{
+                            padding: '14px 8px 14px 4px',
+                            fontSize: '16px',
+                            color: 'rgba(255,255,255,0.28)',
+                            borderBottom: '1px solid rgba(255,255,255,0.07)',
                             whiteSpace: 'nowrap',
-                            letterSpacing: '0.02em',
-                            transition: 'border-color 150ms ease, color 150ms ease',
-                          }}
-                          onMouseEnter={(e) => { e.currentTarget.style.borderColor = 'rgba(255,255,255,0.45)'; e.currentTarget.style.color = '#ffffff' }}
-                          onMouseLeave={(e) => { e.currentTarget.style.borderColor = 'rgba(255,255,255,0.2)'; e.currentTarget.style.color = 'rgba(255,255,255,0.65)' }}
-                        >
-                          → Emisión
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
+                            userSelect: 'none',
+                          }}>
+                            ›
+                          </td>
+                        )}
+
+                        {/* Emisión button (normal mode only) */}
+                        {!selectionMode && (
+                          <td
+                            style={{
+                              padding: '8px 10px',
+                              borderBottom: '1px solid rgba(255,255,255,0.07)',
+                              whiteSpace: 'nowrap',
+                            }}
+                            onClick={(e) => e.stopPropagation()}
+                            onTouchStart={(e) => e.stopPropagation()}
+                            onContextMenu={(e) => e.stopPropagation()}
+                          >
+                            <button
+                              onClick={(e) => handleEmision(e, p)}
+                              style={{
+                                fontFamily: 'Outfit, sans-serif',
+                                fontSize: '11px',
+                                fontWeight: 500,
+                                color: 'rgba(255,255,255,0.65)',
+                                background: 'none',
+                                border: '1px solid rgba(255,255,255,0.2)',
+                                borderRadius: '8px',
+                                padding: '6px 10px',
+                                minHeight: '36px',
+                                cursor: 'pointer',
+                                touchAction: 'manipulation',
+                                whiteSpace: 'nowrap',
+                                letterSpacing: '0.02em',
+                                transition: 'border-color 150ms ease, color 150ms ease',
+                              }}
+                              onMouseEnter={(e) => { e.currentTarget.style.borderColor = 'rgba(255,255,255,0.45)'; e.currentTarget.style.color = '#ffffff' }}
+                              onMouseLeave={(e) => { e.currentTarget.style.borderColor = 'rgba(255,255,255,0.2)'; e.currentTarget.style.color = 'rgba(255,255,255,0.65)' }}
+                            >
+                              → Emisión
+                            </button>
+                          </td>
+                        )}
+                      </tr>
+                    )
+                  })}
                 </tbody>
               </table>
             </div>
@@ -435,8 +683,8 @@ export default function Registry({ onBack, onEditPatient, onExport, exporting, o
         )}
       </main>
 
-      {/* Footer export button — only when patients exist */}
-      {patients && patients.length > 0 && (
+      {/* ── Normal-mode footer ── */}
+      {!selectionMode && patients && patients.length > 0 && (
         <footer style={{
           flexShrink: 0,
           padding: '16px 24px 32px',
@@ -467,6 +715,7 @@ export default function Registry({ onBack, onEditPatient, onExport, exporting, o
                 alignItems: 'center',
                 justifyContent: 'center',
                 gap: '8px',
+                marginBottom: '10px',
               }}
               onMouseEnter={(e) => { if (!bulkSending) { e.currentTarget.style.color = 'rgba(255,255,255,0.8)'; e.currentTarget.style.borderColor = 'rgba(255,255,255,0.3)' } }}
               onMouseLeave={(e) => { e.currentTarget.style.color = 'rgba(255,255,255,0.55)'; e.currentTarget.style.borderColor = 'rgba(255,255,255,0.15)' }}
@@ -489,24 +738,17 @@ export default function Registry({ onBack, onEditPatient, onExport, exporting, o
               )}
             </button>
           ) : (
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '4px 0' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '4px 0', marginBottom: '10px' }}>
               <span style={{ fontFamily: 'Outfit, sans-serif', fontSize: '13px', color: 'rgba(255,255,255,0.48)', flex: 1, lineHeight: 1.4 }}>
                 ¿Enviar {patients.length} paciente{patients.length !== 1 ? 's' : ''} a la cola?
               </span>
               <button
                 onClick={handleBulkEmision}
                 style={{
-                  fontFamily: 'Outfit, sans-serif',
-                  fontSize: '13px',
-                  fontWeight: 500,
-                  color: 'rgba(255,255,255,0.65)',
-                  background: 'rgba(255,255,255,0.1)',
-                  border: 'none',
-                  borderRadius: '8px',
-                  padding: '9px 14px',
-                  minHeight: '36px',
-                  cursor: 'pointer',
-                  flexShrink: 0,
+                  fontFamily: 'Outfit, sans-serif', fontSize: '13px', fontWeight: 500,
+                  color: 'rgba(255,255,255,0.65)', background: 'rgba(255,255,255,0.1)',
+                  border: 'none', borderRadius: '8px', padding: '9px 14px',
+                  minHeight: '36px', cursor: 'pointer', flexShrink: 0,
                   transition: 'background 120ms ease',
                 }}
                 onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(255,255,255,0.16)' }}
@@ -517,27 +759,18 @@ export default function Registry({ onBack, onEditPatient, onExport, exporting, o
               <button
                 onClick={() => setBulkConfirm(false)}
                 style={{
-                  fontFamily: 'Outfit, sans-serif',
-                  fontSize: '13px',
-                  fontWeight: 600,
-                  color: '#172137',
-                  background: '#ffffff',
-                  border: 'none',
-                  borderRadius: '8px',
-                  padding: '9px 14px',
-                  minHeight: '36px',
-                  cursor: 'pointer',
-                  flexShrink: 0,
-                  transition: 'opacity 120ms ease',
+                  fontFamily: 'Outfit, sans-serif', fontSize: '13px', fontWeight: 600,
+                  color: '#172137', background: '#ffffff', border: 'none',
+                  borderRadius: '8px', padding: '9px 14px',
+                  minHeight: '36px', cursor: 'pointer', flexShrink: 0,
                 }}
-                onMouseEnter={(e) => { e.currentTarget.style.opacity = '0.88' }}
-                onMouseLeave={(e) => { e.currentTarget.style.opacity = '1' }}
               >
                 Cancelar
               </button>
             </div>
           )}
 
+          {/* Export */}
           <button
             onClick={onExport}
             disabled={exporting}
@@ -575,12 +808,10 @@ export default function Registry({ onBack, onEditPatient, onExport, exporting, o
                 <div
                   className="animate-spin"
                   style={{
-                    width: '18px',
-                    height: '18px',
+                    width: '18px', height: '18px',
                     border: '2px solid rgba(255,255,255,0.2)',
                     borderTopColor: 'rgba(255,255,255,0.6)',
-                    borderRadius: '50%',
-                    flexShrink: 0,
+                    borderRadius: '50%', flexShrink: 0,
                   }}
                   aria-hidden="true"
                 />
@@ -596,14 +827,116 @@ export default function Registry({ onBack, onEditPatient, onExport, exporting, o
         </footer>
       )}
 
-      {/* Emisión toast */}
+      {/* ── Selection-mode bulk action bar (fixed bottom) ── */}
+      {selectionMode && (
+        <div
+          role="toolbar"
+          aria-label="Acciones para seleccionados"
+          style={{
+            position: 'fixed',
+            bottom: 0,
+            left: 0,
+            right: 0,
+            zIndex: 20,
+            background: '#172137',
+            borderTop: '1px solid rgba(255,255,255,0.14)',
+            padding: '12px 16px 28px',
+            display: 'flex',
+            gap: '10px',
+          }}
+        >
+          {/* Emisión */}
+          <button
+            onClick={handleBulkEmisionSelected}
+            disabled={!selectedCount || bulkEmitting}
+            aria-disabled={!selectedCount || bulkEmitting}
+            aria-busy={bulkEmitting}
+            style={{
+              fontFamily: 'Outfit, sans-serif',
+              fontSize: '15px',
+              fontWeight: 500,
+              color: (!selectedCount || bulkEmitting) ? 'rgba(255,255,255,0.28)' : '#ffffff',
+              background: 'none',
+              border: `1.5px solid ${(!selectedCount || bulkEmitting) ? 'rgba(255,255,255,0.15)' : 'rgba(255,255,255,0.4)'}`,
+              borderRadius: '12px',
+              padding: '14px 12px',
+              flex: 1,
+              minHeight: '52px',
+              cursor: (!selectedCount || bulkEmitting) ? 'default' : 'pointer',
+              touchAction: 'manipulation',
+              transition: 'border-color 150ms ease, color 150ms ease, transform 100ms ease',
+              letterSpacing: '0.01em',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '6px',
+            }}
+            onMouseEnter={(e) => { if (selectedCount && !bulkEmitting) { e.currentTarget.style.borderColor = 'rgba(255,255,255,0.7)' } }}
+            onMouseLeave={(e) => { e.currentTarget.style.borderColor = (!selectedCount || bulkEmitting) ? 'rgba(255,255,255,0.15)' : 'rgba(255,255,255,0.4)' }}
+            onMouseDown={(e) => { if (selectedCount && !bulkEmitting) e.currentTarget.style.transform = 'scale(0.97)' }}
+            onMouseUp={(e) => { e.currentTarget.style.transform = 'scale(1)' }}
+            onTouchStart={(e) => { if (selectedCount && !bulkEmitting) e.currentTarget.style.transform = 'scale(0.97)' }}
+            onTouchEnd={(e) => { e.currentTarget.style.transform = 'scale(1)' }}
+          >
+            {bulkEmitting ? (
+              <div
+                className="animate-spin"
+                style={{ width: '16px', height: '16px', border: '2px solid rgba(255,255,255,0.2)', borderTopColor: 'rgba(255,255,255,0.6)', borderRadius: '50%' }}
+                aria-hidden="true"
+              />
+            ) : '→ Emisión'}
+          </button>
+
+          {/* Delete */}
+          <button
+            onClick={() => { if (selectedCount) setBulkDeleteConfirm(true) }}
+            disabled={!selectedCount || bulkDeleting}
+            aria-disabled={!selectedCount || bulkDeleting}
+            style={{
+              fontFamily: 'Outfit, sans-serif',
+              fontSize: '15px',
+              fontWeight: 500,
+              color: (!selectedCount || bulkDeleting) ? 'rgba(255,100,100,0.3)' : 'rgba(255,100,100,0.9)',
+              background: 'none',
+              border: `1.5px solid ${(!selectedCount || bulkDeleting) ? 'rgba(255,100,100,0.15)' : 'rgba(255,100,100,0.35)'}`,
+              borderRadius: '12px',
+              padding: '14px 12px',
+              flex: 1,
+              minHeight: '52px',
+              cursor: (!selectedCount || bulkDeleting) ? 'default' : 'pointer',
+              touchAction: 'manipulation',
+              transition: 'border-color 150ms ease, color 150ms ease, transform 100ms ease',
+              letterSpacing: '0.01em',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}
+            onMouseEnter={(e) => { if (selectedCount && !bulkDeleting) e.currentTarget.style.borderColor = 'rgba(255,100,100,0.6)' }}
+            onMouseLeave={(e) => { e.currentTarget.style.borderColor = (!selectedCount || bulkDeleting) ? 'rgba(255,100,100,0.15)' : 'rgba(255,100,100,0.35)' }}
+            onMouseDown={(e) => { if (selectedCount && !bulkDeleting) e.currentTarget.style.transform = 'scale(0.97)' }}
+            onMouseUp={(e) => { e.currentTarget.style.transform = 'scale(1)' }}
+            onTouchStart={(e) => { if (selectedCount && !bulkDeleting) e.currentTarget.style.transform = 'scale(0.97)' }}
+            onTouchEnd={(e) => { e.currentTarget.style.transform = 'scale(1)' }}
+          >
+            {bulkDeleting ? (
+              <div
+                className="animate-spin"
+                style={{ width: '16px', height: '16px', border: '2px solid rgba(255,100,100,0.2)', borderTopColor: 'rgba(255,100,100,0.6)', borderRadius: '50%' }}
+                aria-hidden="true"
+              />
+            ) : 'Eliminar'}
+          </button>
+        </div>
+      )}
+
+      {/* ── Toast ── */}
       {emisionToast && (
         <div
           role="status"
           aria-live="polite"
           style={{
             position: 'fixed',
-            bottom: '24px',
+            bottom: selectionMode ? '112px' : '24px',
             left: '50%',
             transform: 'translateX(-50%)',
             background: 'rgba(255,255,255,0.12)',
@@ -617,7 +950,7 @@ export default function Registry({ onBack, onEditPatient, onExport, exporting, o
             fontWeight: 500,
             color: '#ffffff',
             whiteSpace: 'nowrap',
-            zIndex: 100,
+            zIndex: 30,
             letterSpacing: '0.01em',
             pointerEvents: 'none',
           }}
@@ -626,7 +959,123 @@ export default function Registry({ onBack, onEditPatient, onExport, exporting, o
         </div>
       )}
 
-      {/* Delete confirmation dialog */}
+      {/* ── Bulk delete confirmation dialog ── */}
+      {bulkDeleteConfirm && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-label="Confirmar eliminación masiva"
+          style={{
+            position: 'fixed',
+            inset: 0,
+            background: 'rgba(0,0,0,0.65)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: '24px',
+            zIndex: 40,
+          }}
+          onClick={(e) => { if (e.target === e.currentTarget) setBulkDeleteConfirm(false) }}
+        >
+          <div style={{
+            background: '#172137',
+            border: '1px solid rgba(255,255,255,0.15)',
+            borderRadius: '16px',
+            padding: '28px 24px',
+            width: '100%',
+            maxWidth: '340px',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '20px',
+          }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+              <p style={{
+                fontSize: '16px',
+                lineHeight: 1.45,
+                color: '#ffffff',
+                textAlign: 'center',
+                margin: 0,
+                fontFamily: 'Outfit, sans-serif',
+                fontWeight: 600,
+              }}>
+                ¿Eliminar {selectedCount} paciente{selectedCount !== 1 ? 's' : ''} del registro?
+              </p>
+              <p style={{
+                fontSize: '13px',
+                lineHeight: 1.55,
+                color: 'rgba(255,255,255,0.45)',
+                textAlign: 'center',
+                margin: 0,
+                fontFamily: 'Outfit, sans-serif',
+              }}>
+                Esta acción eliminará sus datos del Excel y no se puede deshacer.
+              </p>
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+              <button
+                onClick={() => setBulkDeleteConfirm(false)}
+                style={{
+                  fontFamily: 'Outfit, sans-serif',
+                  fontSize: '16px', fontWeight: 600,
+                  color: '#172137', background: '#ffffff',
+                  border: 'none', borderRadius: '12px',
+                  padding: '16px', minHeight: '56px',
+                  cursor: 'pointer', touchAction: 'manipulation',
+                  transition: 'transform 100ms ease',
+                }}
+                onMouseDown={(e) => { e.currentTarget.style.transform = 'scale(0.98)' }}
+                onMouseUp={(e) => { e.currentTarget.style.transform = 'scale(1)' }}
+                onTouchStart={(e) => { e.currentTarget.style.transform = 'scale(0.98)' }}
+                onTouchEnd={(e) => { e.currentTarget.style.transform = 'scale(1)' }}
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={handleBulkDelete}
+                disabled={bulkDeleting}
+                aria-busy={bulkDeleting}
+                style={{
+                  fontFamily: 'Outfit, sans-serif',
+                  fontSize: '15px', fontWeight: 500,
+                  color: bulkDeleting ? 'rgba(255,100,100,0.4)' : 'rgba(255,100,100,0.9)',
+                  background: 'none',
+                  border: '1.5px solid rgba(255,100,100,0.3)',
+                  borderRadius: '12px',
+                  padding: '14px', minHeight: '52px',
+                  cursor: bulkDeleting ? 'default' : 'pointer',
+                  touchAction: 'manipulation',
+                  transition: 'transform 100ms ease, color 150ms ease',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px',
+                }}
+                onMouseDown={(e) => { if (!bulkDeleting) e.currentTarget.style.transform = 'scale(0.98)' }}
+                onMouseUp={(e) => { e.currentTarget.style.transform = 'scale(1)' }}
+                onTouchStart={(e) => { if (!bulkDeleting) e.currentTarget.style.transform = 'scale(0.98)' }}
+                onTouchEnd={(e) => { e.currentTarget.style.transform = 'scale(1)' }}
+              >
+                {bulkDeleting ? (
+                  <>
+                    <div
+                      className="animate-spin"
+                      style={{
+                        width: '16px', height: '16px',
+                        border: '2px solid rgba(255,100,100,0.2)',
+                        borderTopColor: 'rgba(255,100,100,0.6)',
+                        borderRadius: '50%', flexShrink: 0,
+                      }}
+                      aria-hidden="true"
+                    />
+                    Eliminando...
+                  </>
+                ) : (
+                  `Eliminar ${selectedCount} paciente${selectedCount !== 1 ? 's' : ''}`
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Individual delete confirmation dialog (context-menu) ── */}
       {deleteTarget && (
         <div
           role="dialog"
@@ -640,7 +1089,7 @@ export default function Registry({ onBack, onEditPatient, onExport, exporting, o
             alignItems: 'center',
             justifyContent: 'center',
             padding: '24px',
-            zIndex: 50,
+            zIndex: 40,
           }}
           onClick={(e) => { if (e.target === e.currentTarget && !deleting) setDeleteTarget(null) }}
         >
@@ -657,23 +1106,16 @@ export default function Registry({ onBack, onEditPatient, onExport, exporting, o
           }}>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
               <p style={{
-                fontSize: '16px',
-                lineHeight: 1.55,
-                color: '#ffffff',
-                textAlign: 'center',
-                margin: 0,
-                fontFamily: 'Outfit, sans-serif',
-                fontWeight: 600,
+                fontSize: '16px', lineHeight: 1.55,
+                color: '#ffffff', textAlign: 'center',
+                margin: 0, fontFamily: 'Outfit, sans-serif', fontWeight: 600,
               }}>
                 ¿Eliminar a {deleteTarget.nombre || 'este paciente'} del registro?
               </p>
               <p style={{
-                fontSize: '14px',
-                lineHeight: 1.5,
-                color: 'rgba(255,255,255,0.45)',
-                textAlign: 'center',
-                margin: 0,
-                fontFamily: 'Outfit, sans-serif',
+                fontSize: '14px', lineHeight: 1.5,
+                color: 'rgba(255,255,255,0.45)', textAlign: 'center',
+                margin: 0, fontFamily: 'Outfit, sans-serif',
               }}>
                 Esta acción no se puede deshacer.
               </p>
@@ -684,18 +1126,13 @@ export default function Registry({ onBack, onEditPatient, onExport, exporting, o
                 disabled={deleting}
                 style={{
                   fontFamily: 'Outfit, sans-serif',
-                  fontSize: '16px',
-                  fontWeight: 600,
-                  color: '#172137',
-                  background: '#ffffff',
-                  border: 'none',
-                  borderRadius: '12px',
-                  padding: '16px',
-                  minHeight: '56px',
+                  fontSize: '16px', fontWeight: 600,
+                  color: '#172137', background: '#ffffff',
+                  border: 'none', borderRadius: '12px',
+                  padding: '16px', minHeight: '56px',
                   cursor: deleting ? 'default' : 'pointer',
                   opacity: deleting ? 0.5 : 1,
-                  touchAction: 'manipulation',
-                  transition: 'transform 100ms ease',
+                  touchAction: 'manipulation', transition: 'transform 100ms ease',
                 }}
                 onMouseDown={(e) => { if (!deleting) e.currentTarget.style.transform = 'scale(0.98)' }}
                 onMouseUp={(e) => { e.currentTarget.style.transform = 'scale(1)' }}
@@ -710,21 +1147,16 @@ export default function Registry({ onBack, onEditPatient, onExport, exporting, o
                 aria-busy={deleting}
                 style={{
                   fontFamily: 'Outfit, sans-serif',
-                  fontSize: '15px',
-                  fontWeight: 500,
+                  fontSize: '15px', fontWeight: 500,
                   color: deleting ? 'rgba(255,100,100,0.4)' : 'rgba(255,100,100,0.9)',
                   background: 'none',
                   border: '1.5px solid rgba(255,100,100,0.3)',
                   borderRadius: '12px',
-                  padding: '14px',
-                  minHeight: '52px',
+                  padding: '14px', minHeight: '52px',
                   cursor: deleting ? 'default' : 'pointer',
                   touchAction: 'manipulation',
                   transition: 'transform 100ms ease, color 150ms ease',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  gap: '8px',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px',
                 }}
                 onMouseDown={(e) => { if (!deleting) e.currentTarget.style.transform = 'scale(0.98)' }}
                 onMouseUp={(e) => { e.currentTarget.style.transform = 'scale(1)' }}
@@ -736,12 +1168,10 @@ export default function Registry({ onBack, onEditPatient, onExport, exporting, o
                     <div
                       className="animate-spin"
                       style={{
-                        width: '16px',
-                        height: '16px',
+                        width: '16px', height: '16px',
                         border: '2px solid rgba(255,100,100,0.2)',
                         borderTopColor: 'rgba(255,100,100,0.6)',
-                        borderRadius: '50%',
-                        flexShrink: 0,
+                        borderRadius: '50%', flexShrink: 0,
                       }}
                       aria-hidden="true"
                     />

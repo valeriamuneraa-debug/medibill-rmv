@@ -336,6 +336,55 @@ export async function migrateWorkbook(newFile, keepPatients) {
   })
 }
 
+// Rebuild Hoja 1 without the specified patient IDs. More reliable than
+// repeated single-row shifts because it never mis-shifts adjacent rows.
+export async function bulkDeletePatients(patientIds) {
+  const idSet = new Set(
+    patientIds.filter(id => id != null).map(id => String(id).trim())
+  )
+  if (idSet.size === 0) return
+
+  const b64 = await getWorkbook()
+  if (!b64) throw new Error('No hay plantilla guardada')
+
+  const wb = XLSX.read(b64, { type: 'base64' })
+  const ws = wb.Sheets[SHEET_NAME]
+  if (!ws || !ws['!ref']) return
+
+  const range    = XLSX.utils.decode_range(ws['!ref'])
+  const newWs    = {}
+  let   writeRow = 0
+
+  for (let r = 0; r <= range.e.r; r++) {
+    if (r > 0) {
+      const idCell = ws[XLSX.utils.encode_cell({ r, c: COL.ID })]
+      const rowId  = idCell ? String(idCell.v ?? '').trim() : ''
+      if (rowId && idSet.has(rowId)) continue
+
+      const nombreCell = ws[XLSX.utils.encode_cell({ r, c: COL.NOMBRE })]
+      if (!nombreCell || !String(nombreCell.v ?? '').trim()) continue
+    }
+
+    for (let c = 0; c <= range.e.c; c++) {
+      const src = XLSX.utils.encode_cell({ r, c })
+      if (ws[src]) newWs[XLSX.utils.encode_cell({ r: writeRow, c })] = { ...ws[src] }
+    }
+    writeRow++
+  }
+
+  if (ws['!cols'])   newWs['!cols']   = ws['!cols']
+  if (ws['!rows'])   newWs['!rows']   = ws['!rows']
+  if (ws['!merges']) newWs['!merges'] = ws['!merges']
+  newWs['!ref'] = XLSX.utils.encode_range({
+    s: { r: 0, c: 0 },
+    e: { r: Math.max(0, writeRow - 1), c: range.e.c },
+  })
+
+  wb.Sheets[SHEET_NAME] = newWs
+  buildResumen(wb)
+  await setWorkbook(XLSX.write(wb, { type: 'base64', bookType: 'xlsx' }))
+}
+
 export async function updatePatient(rowIndex, fields) {
   const b64 = await getWorkbook()
   if (!b64) throw new Error('No hay plantilla guardada')
