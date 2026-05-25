@@ -60,91 +60,72 @@
     'cucuta':           { ciudad: 'Cúcuta',                    dpto: 'Norte de Santander' },
   }
 
-  // ── Form field selectors ──────────────────────────────────────────────────
-  // Verify these against the actual facturador.emision.co DOM in DevTools.
-  // Open the Agregar Cliente form → right-click any field → Inspect.
-  const SEL = {
-    nombre:     'input[name="name"], input[name="razon_social"], input[id*="name"]',
-    tipoDoc:    'select[name="document_type"], select[name="tipo_documento"], select[id*="document_type"]',
-    numDoc:     'input[name="document_number"], input[name="document"], input[name="numero_documento"]',
-    tipoOrg:    'select[name="organization_type"], select[name="tipo_organizacion"]',
-    regimen:    'select[name="tax_regime"], select[name="regimen_fiscal"], select[name="regime"]',
-    respFiscal: 'select[name="fiscal_responsibility"], select[name="responsabilidad_fiscal"]',
-    detTrib:    'select[name="tax_detail"], select[name="detalles_tributarios"]',
-    pais:       'select[name="country"], select[name="pais"]',
-    dpto:       'select[name="state"], select[name="departamento"], select[name="province"]',
-    ciudad:     'select[name="city"], select[name="ciudad"], select[name="municipality"]',
-    direccion:  'input[name="address"], input[name="direccion"]',
-    genero:     'select[name="gender"], select[name="genero"]',
-    telefono:   'input[name="phone"], input[name="telefono"], input[type="tel"]',
-    email:      'input[name="email"], input[type="email"]',
-  }
+  // ── Helpers ───────────────────────────────────────────────────────────────
 
-  // ── Utilities ─────────────────────────────────────────────────────────────
+  const sleep = ms => new Promise(r => setTimeout(r, ms))
 
-  function wait(ms) {
-    return new Promise(resolve => setTimeout(resolve, ms))
-  }
-
-  function norm(str) {
-    return (str || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').trim()
-  }
-
-  // Resolve first matching selector for multi-selector strings.
-  function queryFirst(multiSel) {
-    for (const sel of multiSel.split(',').map(s => s.trim())) {
-      try {
-        const el = document.querySelector(sel)
-        if (el) return el
-      } catch (_) { /* invalid selector, skip */ }
+  // Find a form element by scanning label text (label[for], sibling, or wrapper).
+  function findInputByLabel(labelText) {
+    const labels = document.querySelectorAll('label')
+    for (const label of labels) {
+      if (label.textContent.trim().startsWith(labelText)) {
+        const forId = label.getAttribute('for')
+        if (forId) {
+          const el = document.getElementById(forId)
+          if (el) return el
+        }
+        const input = label.parentElement?.querySelector('input, select, textarea')
+        if (input) return input
+        const next = label.nextElementSibling
+        if (next && (next.tagName === 'INPUT' || next.tagName === 'SELECT')) return next
+        const wrapper = label.closest('.form-group, .field, div')
+        if (wrapper) {
+          const el2 = wrapper.querySelector('input, select')
+          if (el2 && el2 !== label) return el2
+        }
+      }
     }
     return null
   }
 
-  // Fill a React-controlled <input> or <textarea>.
-  function fillInput(multiSel, value) {
-    const el = queryFirst(multiSel)
+  // Fill a React-controlled text input (triggers focus/input/change/blur).
+  function fillReactInput(el, value) {
     if (!el) return false
-    const proto = el.tagName === 'TEXTAREA'
-      ? window.HTMLTextAreaElement.prototype
-      : window.HTMLInputElement.prototype
-    const setter = Object.getOwnPropertyDescriptor(proto, 'value').set
-    setter.call(el, String(value))
-    el.dispatchEvent(new Event('input',  { bubbles: true }))
-    el.dispatchEvent(new Event('change', { bubbles: true }))
-    return true
+    try {
+      const nativeSetter = Object.getOwnPropertyDescriptor(
+        window.HTMLInputElement.prototype, 'value'
+      ).set
+      nativeSetter.call(el, String(value))
+      el.dispatchEvent(new Event('focus',  { bubbles: true }))
+      el.dispatchEvent(new Event('input',  { bubbles: true }))
+      el.dispatchEvent(new Event('change', { bubbles: true }))
+      el.dispatchEvent(new Event('blur',   { bubbles: true }))
+      return true
+    } catch (e) { return false }
   }
 
-  // Fill a React-controlled <select>.
-  function fillSelect(multiSel, value) {
-    const el = queryFirst(multiSel)
+  // Fill a React-controlled select by visible option text (partial match).
+  async function fillReactSelect(el, optionText) {
     if (!el) return false
-    // Try exact match first, then case-insensitive partial match.
-    const options = Array.from(el.options)
-    const target  = norm(value)
-    const match   = options.find(o => norm(o.text) === target || norm(o.value) === target)
-                 || options.find(o => norm(o.text).includes(target) || target.includes(norm(o.text)))
-    if (!match) return false
-    const setter = Object.getOwnPropertyDescriptor(window.HTMLSelectElement.prototype, 'value').set
-    setter.call(el, match.value)
-    el.dispatchEvent(new Event('change', { bubbles: true }))
-    return true
-  }
-
-  function getCityAndDept(direccion) {
-    const DEFAULT = { ciudad: 'Medellín', dpto: 'Antioquia' }
-    if (!direccion) return DEFAULT
-
-    const tokens = norm(direccion).split(/[\s,#.-]+/).filter(Boolean)
-
-    // Try 2-word combos first (e.g. "santa marta"), then 1-word.
-    for (let len = 2; len >= 1; len--) {
-      for (let i = 0; i <= tokens.length - len; i++) {
-        const candidate = tokens.slice(i, i + len).join(' ')
-        if (CITIES[candidate]) return CITIES[candidate]
+    try {
+      const options = Array.from(el.options)
+      const match = options.find(o =>
+        o.text.trim().includes(optionText) || optionText.includes(o.text.trim())
+      )
+      if (!match) {
+        console.warn('MediBill: no option found for', optionText,
+          'in', options.map(o => o.text))
+        return false
       }
-    }
-    return DEFAULT
+      const nativeSetter = Object.getOwnPropertyDescriptor(
+        window.HTMLSelectElement.prototype, 'value'
+      ).set
+      nativeSetter.call(el, match.value)
+      el.dispatchEvent(new Event('focus',  { bubbles: true }))
+      el.dispatchEvent(new Event('change', { bubbles: true }))
+      el.dispatchEvent(new Event('blur',   { bubbles: true }))
+      return true
+    } catch (e) { return false }
   }
 
   // ── Floating button ───────────────────────────────────────────────────────
@@ -234,29 +215,145 @@
     })
   }
 
+  // ── City → departamento lookup ────────────────────────────────────────────
+
+  function getCityAndDept(direccion) {
+    if (!direccion) return { ciudad: '', dpto: '' }
+    const norm = direccion.toLowerCase()
+      .normalize('NFD').replace(/[̀-ͯ]/g, '')
+    for (const [key, val] of Object.entries(CITIES)) {
+      if (norm.includes(key)) return val
+    }
+    return { ciudad: '', dpto: '' }
+  }
+
   // ── Form fill ─────────────────────────────────────────────────────────────
 
   async function fillForm(patient) {
+    const log = (msg) => console.log('MediBill:', msg)
+    await sleep(500)
+
+    // 1. Nombre del cliente
+    const nombre = findInputByLabel('Nombre del cliente')
+      || findInputByLabel('Nombre')
+      || findInputByLabel('Razón social')
+    if (fillReactInput(nombre, patient.nombre || '')) {
+      log('nombre ✓'); nombre?.scrollIntoView({ block: 'center' })
+    } else { log('nombre ✗ — no field found') }
+    await sleep(300)
+
+    // 2. Tipo de documento
+    const tipoDoc = findInputByLabel('Tipo de documento')
+      || findInputByLabel('Tipo documento')
+    if (await fillReactSelect(tipoDoc, patient.tipoDoc || 'Cédula de ciudadanía')) {
+      log('tipoDoc ✓')
+    } else { log('tipoDoc ✗') }
+    await sleep(300)
+
+    // 3. Número de documento
+    const numDoc = findInputByLabel('Número de documento')
+      || findInputByLabel('Número documento')
+      || findInputByLabel('NIT / Cédula')
+    if (fillReactInput(numDoc, patient.id || '')) {
+      log('numDoc ✓')
+    } else { log('numDoc ✗') }
+    await sleep(300)
+
+    // 4. Tipo de organización
+    const tipoOrg = findInputByLabel('Tipo de organización')
+      || findInputByLabel('Tipo organización')
+      || findInputByLabel('Tipo de persona')
+    if (await fillReactSelect(tipoOrg, 'Persona Natural')) {
+      log('tipoOrg ✓')
+    } else { log('tipoOrg ✗') }
+    await sleep(300)
+
+    // 5. Régimen fiscal
+    const regimen = findInputByLabel('Régimen')
+      || findInputByLabel('Régimen fiscal')
+      || findInputByLabel('Regimen')
+    if (await fillReactSelect(regimen, 'No responsable de IVA')) {
+      log('regimen ✓')
+    } else { log('regimen ✗') }
+    await sleep(300)
+
+    // 6. Responsabilidad fiscal
+    const respFiscal = findInputByLabel('Responsabilidad fiscal')
+      || findInputByLabel('Responsabilidades fiscales')
+    if (await fillReactSelect(respFiscal, 'R-99-PN')) {
+      log('respFiscal ✓')
+    } else { log('respFiscal ✗') }
+    await sleep(300)
+
+    // 7. Detalle tributario
+    const detTrib = findInputByLabel('Detalle tributario')
+      || findInputByLabel('Tributos')
+    if (await fillReactSelect(detTrib, 'ZZ')) {
+      log('detTrib ✓')
+    } else { log('detTrib ✗') }
+    await sleep(300)
+
+    // 8. País
+    const pais = findInputByLabel('País')
+      || findInputByLabel('Pais')
+    if (await fillReactSelect(pais, 'Colombia')) {
+      log('pais ✓')
+    } else { log('pais ✗') }
+    await sleep(300)
+
+    // 9. Departamento
     const { ciudad, dpto } = getCityAndDept(patient.direccion)
+    const dptoEl = findInputByLabel('Departamento')
+    if (await fillReactSelect(dptoEl, dpto)) {
+      log('dpto ✓ →', dpto)
+    } else { log('dpto ✗') }
 
-    fillInput(SEL.nombre,     patient.nombre    || '')
-    fillSelect(SEL.tipoDoc,   patient.tipoDoc   || 'Cédula de ciudadanía')
-    fillInput(SEL.numDoc,     patient.id        || '')
-    fillSelect(SEL.tipoOrg,   'Persona Natural')
-    fillSelect(SEL.regimen,   'No responsable de IVA')
-    fillSelect(SEL.respFiscal,'R-99-PN – No aplica – Otros*')
-    fillSelect(SEL.detTrib,   'ZZ – No aplica')
-    fillSelect(SEL.pais,      'Colombia')
-    fillSelect(SEL.dpto,      dpto)
+    // Ciudad dropdown repopulates after departamento — wait longer
+    await sleep(700)
 
-    // Ciudad dropdown is dependent — wait for it to repopulate after departamento change.
-    await wait(500)
+    // 10. Ciudad
+    const ciudadEl = findInputByLabel('Ciudad')
+      || findInputByLabel('Municipio')
+    if (await fillReactSelect(ciudadEl, ciudad)) {
+      log('ciudad ✓ →', ciudad)
+    } else { log('ciudad ✗') }
+    await sleep(300)
 
-    fillSelect(SEL.ciudad,    ciudad)
-    fillInput(SEL.direccion,  patient.direccion || '')
-    fillSelect(SEL.genero,    patient.genero    || 'Femenino')
-    fillInput(SEL.telefono,   patient.telefono  || '')
-    fillInput(SEL.email,      patient.email     || '')
+    // 11. Dirección
+    const dir = findInputByLabel('Dirección')
+      || findInputByLabel('Direccion')
+      || findInputByLabel('Dirección de residencia')
+    if (fillReactInput(dir, patient.direccion || '')) {
+      log('direccion ✓')
+    } else { log('direccion ✗') }
+    await sleep(300)
+
+    // 12. Género
+    const genero = findInputByLabel('Género')
+      || findInputByLabel('Sexo')
+    if (await fillReactSelect(genero, patient.genero || 'Femenino')) {
+      log('genero ✓')
+    } else { log('genero ✗') }
+    await sleep(300)
+
+    // 13. Teléfono
+    const tel = findInputByLabel('Teléfono')
+      || findInputByLabel('Telefono')
+      || findInputByLabel('Celular')
+    if (fillReactInput(tel, patient.telefono || '')) {
+      log('telefono ✓')
+    } else { log('telefono ✗') }
+    await sleep(300)
+
+    // 14. Correo electrónico
+    const email = findInputByLabel('Correo')
+      || findInputByLabel('Email')
+      || findInputByLabel('Correo electrónico')
+    if (fillReactInput(email, patient.email || '')) {
+      log('email ✓')
+    } else { log('email ✗') }
+
+    return true
   }
 
   // ── Success detection ─────────────────────────────────────────────────────
