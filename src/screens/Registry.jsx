@@ -55,7 +55,9 @@ export default function Registry({ onBack, onEditPatient, onExport, exporting, o
 
   useEffect(() => {
     readPatients()
-      .then(setPatients)
+      .then(rows => setPatients(
+        rows.filter(p => p.nombre && p.nombre.trim() !== '' && p.nombre !== 'Nombre')
+      ))
       .catch(() => setPatients([]))
   }, [])
 
@@ -202,6 +204,7 @@ export default function Registry({ onBack, onEditPatient, onExport, exporting, o
                     <TH width="120px">Procedimiento</TH>
                     <TH width="105px" right>Factura Dian</TH>
                     <TH width="105px" right>Presupuesto</TH>
+                    <TH width="28px" />
                   </tr>
                 </thead>
                 <tbody>
@@ -273,6 +276,16 @@ export default function Registry({ onBack, onEditPatient, onExport, exporting, o
                         whiteSpace: 'nowrap',
                       }}>
                         {formatPeso(p.presupuesto)}
+                      </td>
+                      <td style={{
+                        padding: '14px 8px 14px 4px',
+                        fontSize: '16px',
+                        color: 'rgba(255,255,255,0.28)',
+                        borderBottom: '1px solid rgba(255,255,255,0.07)',
+                        whiteSpace: 'nowrap',
+                        userSelect: 'none',
+                      }}>
+                        ›
                       </td>
                     </tr>
                   ))}
