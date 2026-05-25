@@ -35,6 +35,23 @@ const EMISION_TOAST = {
   error:  'No se pudo enviar — verifica la extensión',
 }
 
+async function sendBatchToEmision(allPatients) {
+  if (typeof chrome !== 'undefined' && chrome.runtime?.sendMessage) {
+    return new Promise((resolve) => {
+      try {
+        chrome.runtime.sendMessage(
+          EXTENSION_ID,
+          { type: 'ADD_BATCH_TO_QUEUE', patients: allPatients },
+          (response) => {
+            if (chrome.runtime.lastError || !response?.ok) { resolve('error') } else { resolve('sent') }
+          }
+        )
+      } catch { resolve('error') }
+    })
+  }
+  return 'error'
+}
+
 function serialToDateStr(serial) {
   if (!serial || typeof serial !== 'number') return '—'
   const d = new Date(Math.round((serial - 25569) * 86400000))
@@ -84,6 +101,8 @@ export default function Registry({ onBack, onEditPatient, onExport, exporting, o
   const [deleteTarget, setDeleteTarget] = useState(null)
   const [deleting, setDeleting]         = useState(false)
   const [emisionToast, setEmisionToast] = useState(null)
+  const [bulkConfirm, setBulkConfirm]   = useState(false)
+  const [bulkSending, setBulkSending]   = useState(false)
 
   const longPressTimer  = useRef(null)
   const longPressFired  = useRef(false)
@@ -108,7 +127,34 @@ export default function Registry({ onBack, onEditPatient, onExport, exporting, o
       fecha:     '',
     }
     const result = await sendToEmision(patientData)
-    setEmisionToast(result)
+    setEmisionToast(EMISION_TOAST[result])
+  }
+
+  async function handleBulkEmision() {
+    if (!patients?.length || bulkSending) return
+    setBulkSending(true)
+    setBulkConfirm(false)
+    try {
+      const allPatients = patients.map(p => ({
+        nombre:    p.nombre    ?? '',
+        id:        p.id != null ? String(p.id) : '',
+        edad:      p.edad != null ? String(p.edad) : '',
+        telefono:  p.telefono  ?? '',
+        direccion: p.direccion ?? '',
+        email:     p.email     ?? '',
+        tipoDoc:   p.tipoDoc   ?? 'Cédula de ciudadanía',
+        genero:    p.genero    ?? 'Femenino',
+        fecha:     '',
+      }))
+      const result = await sendBatchToEmision(allPatients)
+      setEmisionToast(
+        result === 'sent'
+          ? `${allPatients.length} paciente${allPatients.length !== 1 ? 's' : ''} enviado${allPatients.length !== 1 ? 's' : ''} a la cola`
+          : EMISION_TOAST.error
+      )
+    } finally {
+      setBulkSending(false)
+    }
   }
 
   useEffect(() => {
@@ -397,6 +443,101 @@ export default function Registry({ onBack, onEditPatient, onExport, exporting, o
           borderTop: '1px solid rgba(255,255,255,0.1)',
           background: '#172137',
         }}>
+          {/* Bulk send to emisión */}
+          {!bulkConfirm ? (
+            <button
+              onClick={() => setBulkConfirm(true)}
+              disabled={bulkSending}
+              style={{
+                fontFamily: 'Outfit, sans-serif',
+                fontSize: '14px',
+                fontWeight: 500,
+                color: bulkSending ? 'rgba(255,255,255,0.3)' : 'rgba(255,255,255,0.55)',
+                background: 'none',
+                border: '1px solid rgba(255,255,255,0.15)',
+                borderRadius: '10px',
+                padding: '13px 16px',
+                width: '100%',
+                minHeight: '48px',
+                cursor: bulkSending ? 'default' : 'pointer',
+                touchAction: 'manipulation',
+                transition: 'color 150ms ease, border-color 150ms ease, transform 100ms ease',
+                letterSpacing: '0.01em',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '8px',
+              }}
+              onMouseEnter={(e) => { if (!bulkSending) { e.currentTarget.style.color = 'rgba(255,255,255,0.8)'; e.currentTarget.style.borderColor = 'rgba(255,255,255,0.3)' } }}
+              onMouseLeave={(e) => { e.currentTarget.style.color = 'rgba(255,255,255,0.55)'; e.currentTarget.style.borderColor = 'rgba(255,255,255,0.15)' }}
+              onMouseDown={(e) => { if (!bulkSending) e.currentTarget.style.transform = 'scale(0.98)' }}
+              onMouseUp={(e) => { e.currentTarget.style.transform = 'scale(1)' }}
+              onTouchStart={(e) => { if (!bulkSending) e.currentTarget.style.transform = 'scale(0.98)' }}
+              onTouchEnd={(e) => { e.currentTarget.style.transform = 'scale(1)' }}
+            >
+              {bulkSending ? (
+                <>
+                  <div
+                    className="animate-spin"
+                    style={{ width: '14px', height: '14px', border: '1.5px solid rgba(255,255,255,0.2)', borderTopColor: 'rgba(255,255,255,0.5)', borderRadius: '50%', flexShrink: 0 }}
+                    aria-hidden="true"
+                  />
+                  Enviando...
+                </>
+              ) : (
+                `Enviar todos a emisión (${patients.length})`
+              )}
+            </button>
+          ) : (
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '4px 0' }}>
+              <span style={{ fontFamily: 'Outfit, sans-serif', fontSize: '13px', color: 'rgba(255,255,255,0.48)', flex: 1, lineHeight: 1.4 }}>
+                ¿Enviar {patients.length} paciente{patients.length !== 1 ? 's' : ''} a la cola?
+              </span>
+              <button
+                onClick={handleBulkEmision}
+                style={{
+                  fontFamily: 'Outfit, sans-serif',
+                  fontSize: '13px',
+                  fontWeight: 500,
+                  color: 'rgba(255,255,255,0.65)',
+                  background: 'rgba(255,255,255,0.1)',
+                  border: 'none',
+                  borderRadius: '8px',
+                  padding: '9px 14px',
+                  minHeight: '36px',
+                  cursor: 'pointer',
+                  flexShrink: 0,
+                  transition: 'background 120ms ease',
+                }}
+                onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(255,255,255,0.16)' }}
+                onMouseLeave={(e) => { e.currentTarget.style.background = 'rgba(255,255,255,0.1)' }}
+              >
+                Sí, enviar
+              </button>
+              <button
+                onClick={() => setBulkConfirm(false)}
+                style={{
+                  fontFamily: 'Outfit, sans-serif',
+                  fontSize: '13px',
+                  fontWeight: 600,
+                  color: '#172137',
+                  background: '#ffffff',
+                  border: 'none',
+                  borderRadius: '8px',
+                  padding: '9px 14px',
+                  minHeight: '36px',
+                  cursor: 'pointer',
+                  flexShrink: 0,
+                  transition: 'opacity 120ms ease',
+                }}
+                onMouseEnter={(e) => { e.currentTarget.style.opacity = '0.88' }}
+                onMouseLeave={(e) => { e.currentTarget.style.opacity = '1' }}
+              >
+                Cancelar
+              </button>
+            </div>
+          )}
+
           <button
             onClick={onExport}
             disabled={exporting}
@@ -481,7 +622,7 @@ export default function Registry({ onBack, onEditPatient, onExport, exporting, o
             pointerEvents: 'none',
           }}
         >
-          {EMISION_TOAST[emisionToast]}
+          {emisionToast}
         </div>
       )}
 

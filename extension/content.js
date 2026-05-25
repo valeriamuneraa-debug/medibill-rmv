@@ -244,18 +244,63 @@
   let formFilled  = false
   let savedHook   = null // cleanup fn
 
+  function showNextOverlay(remaining) {
+    const overlay = document.createElement('div')
+    overlay.style.cssText = [
+      'position:fixed',
+      'inset:0',
+      'z-index:2147483646',
+      'background:rgba(23,33,55,0.94)',
+      'display:flex',
+      'flex-direction:column',
+      'align-items:center',
+      'justify-content:center',
+      'gap:10px',
+      "font-family:'Outfit',system-ui,-apple-system,sans-serif",
+    ].join(';')
+
+    const spinner = document.createElement('div')
+    spinner.style.cssText = [
+      'width:32px',
+      'height:32px',
+      'border:2.5px solid rgba(255,255,255,0.18)',
+      'border-top-color:#ffffff',
+      'border-radius:50%',
+      'animation:rmv-spin 0.7s linear infinite',
+    ].join(';')
+
+    if (!document.getElementById('rmv-spin-style')) {
+      const style = document.createElement('style')
+      style.id = 'rmv-spin-style'
+      style.textContent = '@keyframes rmv-spin { to { transform: rotate(360deg) } }'
+      document.head.appendChild(style)
+    }
+
+    const title = document.createElement('p')
+    title.textContent = 'Cargando siguiente paciente...'
+    title.style.cssText = 'font-size:17px;font-weight:600;color:#ffffff;margin:8px 0 0'
+
+    const sub = document.createElement('p')
+    sub.textContent = `${remaining} paciente${remaining !== 1 ? 's' : ''} restante${remaining !== 1 ? 's' : ''} en cola`
+    sub.style.cssText = 'font-size:13px;color:rgba(255,255,255,0.45);margin:0'
+
+    overlay.appendChild(spinner)
+    overlay.appendChild(title)
+    overlay.appendChild(sub)
+    document.body.appendChild(overlay)
+
+    setTimeout(() => {
+      window.location.href = 'https://facturador.emision.co/clients/form'
+    }, 1200)
+  }
+
   async function onFormSaved() {
     if (savedHook) { savedHook(); savedHook = null }
     formFilled = false
     queue = await removeFirst()
 
     if (queue.length > 0) {
-      const n = queue.length
-      setBtn({
-        text:    `Siguiente paciente ▶ (${n} restante${n !== 1 ? 's' : ''})`,
-        bg:      '#172137',
-        visible: true,
-      })
+      showNextOverlay(queue.length)
     } else {
       setBtn({ text: '✓ Todos los pacientes registrados', bg: '#172137', disabled: true, visible: true })
       setTimeout(() => setBtn({ visible: false }), 4000)

@@ -250,6 +250,7 @@ export default function App() {
         <DatePicker
           onContinue={handleDateSelected}
           onRegistry={handleOpenRegistry}
+          onReset={() => setScreen(SCREENS.SETUP)}
         />
       )
 

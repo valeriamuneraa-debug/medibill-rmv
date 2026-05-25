@@ -29,5 +29,15 @@ chrome.runtime.onMessageExternal.addListener((message, sender, sendResponse) => 
       })
       return true
     }
+
+    case 'ADD_BATCH_TO_QUEUE': {
+      chrome.storage.local.get({ [QUEUE_KEY]: [] }, (data) => {
+        const updated = [...data[QUEUE_KEY], ...(message.patients || [])]
+        chrome.storage.local.set({ [QUEUE_KEY]: updated }, () => {
+          sendResponse({ ok: true, queueLength: updated.length })
+        })
+      })
+      return true
+    }
   }
 })

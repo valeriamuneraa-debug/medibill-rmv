@@ -46,7 +46,6 @@ function render(queue) {
       const name = document.createElement('span')
       name.textContent = p.nombre || 'Paciente sin nombre'
       name.style.cssText = 'font-size:14px;font-weight:500;color:#ffffff;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1'
-
       li.appendChild(name)
 
       if (i === 0) {
@@ -64,12 +63,42 @@ function render(queue) {
         li.appendChild(badge)
       }
 
+      const removeBtn = document.createElement('button')
+      removeBtn.textContent = '✕'
+      removeBtn.setAttribute('aria-label', `Quitar a ${p.nombre || 'paciente'} de la cola`)
+      removeBtn.style.cssText = [
+        'background:none',
+        'border:none',
+        'color:rgba(255,255,255,0.3)',
+        'cursor:pointer',
+        'font-size:13px',
+        'padding:4px 6px',
+        'flex-shrink:0',
+        'font-family:inherit',
+        'transition:color 120ms ease',
+        'line-height:1',
+        'border-radius:4px',
+      ].join(';')
+      removeBtn.addEventListener('mouseenter', () => { removeBtn.style.color = 'rgba(255,255,255,0.75)' })
+      removeBtn.addEventListener('mouseleave', () => { removeBtn.style.color = 'rgba(255,255,255,0.3)' })
+      removeBtn.addEventListener('click', () => removeByIndex(i))
+      li.appendChild(removeBtn)
+
       elList.appendChild(li)
     })
   }
 
   // Reset confirmation state whenever we re-render
   hideConfirm()
+}
+
+// ── Remove single patient ─────────────────────────────────────────────────
+
+function removeByIndex(i) {
+  chrome.storage.local.get({ [QUEUE_KEY]: [] }, data => {
+    const updated = (data[QUEUE_KEY] || []).filter((_, idx) => idx !== i)
+    chrome.storage.local.set({ [QUEUE_KEY]: updated }, load)
+  })
 }
 
 // ── Load ──────────────────────────────────────────────────────────────────
