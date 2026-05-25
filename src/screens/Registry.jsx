@@ -298,8 +298,15 @@ export default function Registry({ onBack, onEditPatient, onExport, exporting, o
 
   return (
     <div
-      className="min-h-dvh flex flex-col"
-      style={{ background: '#172137', fontFamily: 'Outfit, sans-serif', color: '#ffffff' }}
+      style={{
+        display: 'flex',
+        flexDirection: 'column',
+        height: '100dvh',
+        overflow: 'hidden',
+        background: '#172137',
+        fontFamily: 'Outfit, sans-serif',
+        color: '#ffffff',
+      }}
     >
       {/* ── Header ── */}
       <header style={{ display: 'flex', alignItems: 'center', padding: '16px 20px 12px', flexShrink: 0, minHeight: '72px' }}>
@@ -464,14 +471,13 @@ export default function Registry({ onBack, onEditPatient, onExport, exporting, o
         </p>
       )}
 
-      {/* ── Main content ── */}
-      <main
+      {/* ── Scrollable rows ── */}
+      <div
         style={{
           flex: 1,
           overflowY: 'auto',
           overflowX: 'auto',
           WebkitOverflowScrolling: 'touch',
-          paddingBottom: patients && patients.length > 0 ? (selectionMode ? '96px' : '180px') : 0,
         }}
       >
         {patients === null ? (
@@ -690,16 +696,12 @@ export default function Registry({ onBack, onEditPatient, onExport, exporting, o
               </table>
           </>
         )}
-      </main>
+      </div>
 
       {/* ── Normal-mode footer ── */}
       {!selectionMode && patients && patients.length > 0 && (
         <footer style={{
-          position: 'fixed',
-          bottom: 0,
-          left: 0,
-          right: 0,
-          zIndex: 15,
+          flexShrink: 0,
           padding: '16px 24px 32px',
           borderTop: '1px solid rgba(255,255,255,0.1)',
           background: '#172137',
@@ -840,17 +842,13 @@ export default function Registry({ onBack, onEditPatient, onExport, exporting, o
         </footer>
       )}
 
-      {/* ── Selection-mode bulk action bar (fixed bottom) ── */}
+      {/* ── Selection-mode bulk action bar ── */}
       {selectionMode && (
         <div
           role="toolbar"
           aria-label="Acciones para seleccionados"
           style={{
-            position: 'fixed',
-            bottom: 0,
-            left: 0,
-            right: 0,
-            zIndex: 20,
+            flexShrink: 0,
             background: '#172137',
             borderTop: '1px solid rgba(255,255,255,0.14)',
             padding: '12px 16px 28px',
@@ -949,7 +947,7 @@ export default function Registry({ onBack, onEditPatient, onExport, exporting, o
           aria-live="polite"
           style={{
             position: 'fixed',
-            bottom: selectionMode ? '112px' : '24px',
+            bottom: '24px',
             left: '50%',
             transform: 'translateX(-50%)',
             background: 'rgba(255,255,255,0.12)',
