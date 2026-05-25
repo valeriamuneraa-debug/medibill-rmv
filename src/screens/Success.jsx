@@ -85,7 +85,7 @@ const TOAST_MESSAGES = {
   error:  'No se pudo enviar — verifica la extensión',
 }
 
-export default function Success({ patient, date, onAddAnother, onExport, onNewSession, exporting }) {
+export default function Success({ patient, date, onAddAnother, onExport, onNewSession, onRegistry, exporting }) {
   const nombre = (patient?.nombre ?? '').trim() || 'Paciente'
 
   const [sending, setSending] = useState(false)
@@ -334,6 +334,34 @@ export default function Success({ patient, date, onAddAnother, onExport, onNewSe
               </>
             )}
           </button>
+
+          {/* Ver registro */}
+          {onRegistry && (
+            <button
+              onClick={onRegistry}
+              style={{
+                fontFamily: 'Outfit, sans-serif',
+                fontSize: '14px',
+                fontWeight: 400,
+                color: 'rgba(255,255,255,0.35)',
+                background: 'none',
+                border: 'none',
+                cursor: 'pointer',
+                textAlign: 'center',
+                textDecoration: 'underline',
+                textDecorationColor: 'rgba(255,255,255,0.18)',
+                textUnderlineOffset: '3px',
+                padding: '4px 0',
+                touchAction: 'manipulation',
+                transition: 'color 150ms ease',
+                marginTop: '-4px',
+              }}
+              onMouseEnter={(e) => { e.currentTarget.style.color = 'rgba(255,255,255,0.65)' }}
+              onMouseLeave={(e) => { e.currentTarget.style.color = 'rgba(255,255,255,0.35)' }}
+            >
+              Ver todos los pacientes →
+            </button>
+          )}
 
           {/* Quaternary — new session */}
           <button

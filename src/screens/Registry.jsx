@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { readPatients, bulkDeletePatients } from '../lib/xlsx.js'
 
 const EXTENSION_ID = 'ojjbjnbminciinjlfmgmggccjebafjap'
@@ -148,8 +148,6 @@ export default function Registry({ onBack, onEditPatient, onExport, exporting, o
   const [bulkDeleting, setBulkDeleting]         = useState(false)
   const [bulkEmitting, setBulkEmitting]         = useState(false)
 
-  const longPressTimer = useRef(null)
-  const longPressFired = useRef(false)
 
   useEffect(() => {
     if (!emisionToast) return
@@ -196,20 +194,7 @@ export default function Registry({ onBack, onEditPatient, onExport, exporting, o
     }
   }
 
-  // ── Long press ────────────────────────────────────────────────────────────
-
-  function startLongPress(patient) {
-    longPressFired.current = false
-    longPressTimer.current = setTimeout(() => {
-      longPressFired.current = true
-      if (!selectionMode) enterSelectionMode(patient)
-    }, 500)
-  }
-
-  function cancelLongPress() { clearTimeout(longPressTimer.current) }
-
   function handleRowClick(patient) {
-    if (longPressFired.current) return
     if (selectionMode) {
       toggleSelect(patient)
     } else {
@@ -434,7 +419,29 @@ export default function Registry({ onBack, onEditPatient, onExport, exporting, o
               </span>
             </div>
 
-            <div style={{ width: '44px', flexShrink: 0 }} aria-hidden="true" />
+            <button
+              onClick={() => setSelectionMode(true)}
+              style={{
+                fontFamily: 'Outfit, sans-serif',
+                fontSize: '13px',
+                fontWeight: 500,
+                color: 'rgba(255,255,255,0.75)',
+                background: 'none',
+                border: '1px solid rgba(255,255,255,0.3)',
+                borderRadius: '8px',
+                padding: '7px 12px',
+                minHeight: '36px',
+                cursor: 'pointer',
+                touchAction: 'manipulation',
+                transition: 'color 150ms ease, border-color 150ms ease',
+                letterSpacing: '0.01em',
+                flexShrink: 0,
+              }}
+              onMouseEnter={(e) => { e.currentTarget.style.color = '#ffffff'; e.currentTarget.style.borderColor = 'rgba(255,255,255,0.65)' }}
+              onMouseLeave={(e) => { e.currentTarget.style.color = 'rgba(255,255,255,0.75)'; e.currentTarget.style.borderColor = 'rgba(255,255,255,0.3)' }}
+            >
+              Seleccionar
+            </button>
           </>
         )}
       </header>
@@ -519,9 +526,6 @@ export default function Registry({ onBack, onEditPatient, onExport, exporting, o
                         key={p._row}
                         data-row-key={p._row}
                         onClick={() => handleRowClick(p)}
-                        onTouchStart={() => startLongPress(p)}
-                        onTouchEnd={cancelLongPress}
-                        onTouchMove={cancelLongPress}
                         onContextMenu={(e) => {
                           e.preventDefault()
                           if (!selectionMode) setDeleteTarget(p)

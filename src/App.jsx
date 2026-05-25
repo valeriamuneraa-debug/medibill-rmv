@@ -282,6 +282,7 @@ export default function App() {
           onAddAnother={handleAddAnother}
           onExport={handleExportDownload}
           onNewSession={handleNewSession}
+          onRegistry={handleOpenRegistry}
           exporting={exporting}
         />
       )
