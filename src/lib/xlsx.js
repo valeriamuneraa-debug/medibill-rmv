@@ -438,9 +438,26 @@ const STYLE_NO_DATE  = {
 };
 
 function parseDateExport(v) {
-  if (!v) return null;
-  const d = v instanceof Date ? v : new Date(v);
-  return isNaN(d.getTime()) ? null : d;
+  if (!v && v !== 0) return null;
+  if (v instanceof Date) {
+    return isNaN(v.getTime()) ? null : v;
+  }
+  if (typeof v === 'number') {
+    if (v > 0 && v < 60000) {
+      const utcDays = v - 25569;
+      return new Date(utcDays * 86400 * 1000);
+    }
+    if (v > 1e10) {
+      const d = new Date(v);
+      return isNaN(d.getTime()) ? null : d;
+    }
+    return null;
+  }
+  if (typeof v === 'string') {
+    const d = new Date(v);
+    return isNaN(d.getTime()) ? null : d;
+  }
+  return null;
 }
 
 function sortByFecha(patients) {
@@ -454,12 +471,29 @@ function sortByFecha(patients) {
 }
 
 function patientToRow(p) {
+  const idRaw = p.id ?? '';
+  const idVal = idRaw !== '' ? String(parseInt(idRaw) || idRaw) : '';
   return [
-    p.nombre ?? '', parseDateExport(p.fecha) ?? '', p.id ?? '', p.edad ?? '',
-    p.telefono ?? '', p.direccion ?? '', p.email ?? '',
-    p.procedimiento ?? '', p.presupuesto ?? '', p.clinica ?? '',
-    p.implantes ?? '', p.instrum ?? '', p.tiempo ?? '',
-    p.facturaDian ?? '', p.profit ?? '', p.profitDia ?? '',
+    p.nombre ?? '',
+    parseDateExport(p.fecha) ?? '',
+    idVal,
+    p.edad !== undefined && p.edad !== null ? Number(p.edad) : '',
+    p.telefono ? String(p.telefono) : '',
+    p.direccion ?? '',
+    p.email ?? '',
+    p.procedimiento ?? '',
+    p.presupuesto !== undefined && p.presupuesto !== null
+      ? Number(p.presupuesto) : '',
+    p.clinica ?? '',
+    p.implantes ?? '',
+    p.instrum !== undefined && p.instrum !== null
+      ? Number(p.instrum) : '',
+    p.tiempo !== undefined && p.tiempo !== null
+      ? Number(p.tiempo) : '',
+    p.facturaDian !== undefined && p.facturaDian !== null
+      ? Number(p.facturaDian) : '',
+    p.profit ?? '',
+    p.profitDia ?? '',
     p.profitAcumuladoMes ?? '',
   ];
 }
