@@ -176,21 +176,6 @@ export async function appendPatient(patient, dateStr) {
   await setWorkbook(XLSX.write(wb, { type: 'base64', bookType: 'xlsx' }))
 }
 
-export async function downloadWorkbook(dateStr) {
-  const b64 = await getWorkbook()
-  if (!b64) throw new Error('No hay plantilla guardada')
-
-  const wb = XLSX.read(b64, { type: 'base64' })
-  if (wb.SheetNames.includes('Hoja 2')) {
-    delete wb.Sheets['Hoja 2']
-    wb.SheetNames = wb.SheetNames.filter(n => n !== 'Hoja 2')
-  }
-  buildResumen(wb)  // Always regenerate before export
-
-  const effectiveDate = dateStr || new Date().toISOString().split('T')[0]
-  const [y, m, d] = effectiveDate.split('-')
-  XLSX.writeFile(wb, `Pacientes_2026_${d}-${m}-${y}.xlsx`)
-}
 
 export async function readPatients() {
   const b64 = await getWorkbook()

@@ -10,7 +10,7 @@ import Registry from './screens/Registry'
 import PatientEdit from './screens/PatientEdit'
 import ClinicalData from './screens/ClinicalData'
 import { hasWorkbook } from './lib/indexedDB.js'
-import { appendPatient as dbAppendPatient, downloadWorkbook, updatePatient, deletePatient } from './lib/xlsx.js'
+import { appendPatient as dbAppendPatient, readPatients, exportToXlsx, updatePatient, deletePatient } from './lib/xlsx.js'
 
 export class AppErrorBoundary extends Component {
   constructor(props) {
@@ -162,7 +162,10 @@ export default function App() {
   async function handleExportDownload() {
     setExporting(true)
     try {
-      await downloadWorkbook(session.date)
+      const patients = await readPatients()
+      const effectiveDate = session.date || new Date().toISOString().split('T')[0]
+      const [y, m, d] = effectiveDate.split('-')
+      exportToXlsx(patients, `Pacientes_2026_${d}-${m}-${y}.xlsx`)
     } finally {
       setExporting(false)
     }
@@ -200,7 +203,10 @@ export default function App() {
     setExporting(true)
     try {
       const today = new Date().toISOString().split('T')[0]
-      await downloadWorkbook(session.date || today)
+      const patients = await readPatients()
+      const effectiveDate = session.date || today
+      const [y, m, d] = effectiveDate.split('-')
+      exportToXlsx(patients, `Pacientes_2026_${d}-${m}-${y}.xlsx`)
     } finally {
       setExporting(false)
     }
