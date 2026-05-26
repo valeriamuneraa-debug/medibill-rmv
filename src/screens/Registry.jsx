@@ -118,13 +118,13 @@ const TH = ({ children, width, right }) => (
     textAlign: right ? 'right' : 'left',
     fontSize: '11px',
     fontWeight: 600,
-    letterSpacing: '0.07em',
+    letterSpacing: '0.1em',
     textTransform: 'uppercase',
     color: 'rgba(255,255,255,0.5)',
     whiteSpace: 'nowrap',
     width,
     background: '#172137',
-    borderBottom: '1px solid rgba(255,255,255,0.12)',
+    borderBottom: '1px solid rgba(255,255,255,0.1)',
     position: 'sticky',
     top: 0,
     zIndex: 1,
@@ -309,7 +309,7 @@ export default function Registry({ onBack, onEditPatient, onExport, exporting, o
       }}
     >
       {/* ── Header ── */}
-      <header style={{ display: 'flex', alignItems: 'center', padding: '16px 20px 12px', flexShrink: 0, minHeight: '72px' }}>
+      <header style={{ position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px 20px 12px', flexShrink: 0, minHeight: '72px' }}>
         {selectionMode ? (
           <>
             {/* Cancel */}
@@ -324,13 +324,12 @@ export default function Registry({ onBack, onEditPatient, onExport, exporting, o
                 background: 'none',
                 border: 'none',
                 cursor: 'pointer',
-                padding: '8px 0',
+                padding: '8px 16px',
                 minHeight: '44px',
-                minWidth: '72px',
+                position: 'absolute',
+                left: 0,
                 touchAction: 'manipulation',
                 transition: 'color 150ms ease',
-                flexShrink: 0,
-                textAlign: 'left',
               }}
               onMouseEnter={(e) => { e.currentTarget.style.color = '#ffffff' }}
               onMouseLeave={(e) => { e.currentTarget.style.color = 'rgba(255,255,255,0.75)' }}
@@ -343,7 +342,7 @@ export default function Registry({ onBack, onEditPatient, onExport, exporting, o
               role="status"
               aria-live="polite"
               aria-atomic="true"
-              style={{ flex: 1, textAlign: 'center', fontSize: '16px', fontWeight: 600, letterSpacing: '0.01em' }}
+              style={{ textAlign: 'center', fontSize: '16px', fontWeight: 600, letterSpacing: '0.01em' }}
             >
               {selectedCount} seleccionado{selectedCount !== 1 ? 's' : ''}
             </div>
@@ -359,13 +358,12 @@ export default function Registry({ onBack, onEditPatient, onExport, exporting, o
                 background: 'none',
                 border: 'none',
                 cursor: 'pointer',
-                padding: '8px 0',
+                padding: '8px 16px',
                 minHeight: '44px',
-                minWidth: '72px',
+                position: 'absolute',
+                right: 0,
                 touchAction: 'manipulation',
                 transition: 'color 150ms ease',
-                flexShrink: 0,
-                textAlign: 'right',
                 whiteSpace: 'nowrap',
               }}
               onMouseEnter={(e) => { e.currentTarget.style.color = '#ffffff' }}
@@ -391,10 +389,11 @@ export default function Registry({ onBack, onEditPatient, onExport, exporting, o
                 minHeight: '64px',
                 display: 'flex',
                 alignItems: 'center',
-                justifyContent: 'flex-start',
+                justifyContent: 'center',
                 padding: 0,
                 opacity: 0.8,
-                flexShrink: 0,
+                position: 'absolute',
+                left: '12px',
                 touchAction: 'manipulation',
                 transition: 'opacity 150ms ease, transform 100ms ease',
               }}
@@ -408,7 +407,7 @@ export default function Registry({ onBack, onEditPatient, onExport, exporting, o
               ←
             </button>
 
-            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '5px' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '5px' }}>
               <span
                 style={{
                   fontSize: 'clamp(26px, 8vw, 38px)',
@@ -442,7 +441,8 @@ export default function Registry({ onBack, onEditPatient, onExport, exporting, o
                 touchAction: 'manipulation',
                 transition: 'color 150ms ease, border-color 150ms ease',
                 letterSpacing: '0.01em',
-                flexShrink: 0,
+                position: 'absolute',
+                right: '16px',
               }}
               onMouseEnter={(e) => { e.currentTarget.style.color = '#ffffff'; e.currentTarget.style.borderColor = 'rgba(255,255,255,0.65)' }}
               onMouseLeave={(e) => { e.currentTarget.style.color = 'rgba(255,255,255,0.75)'; e.currentTarget.style.borderColor = 'rgba(255,255,255,0.3)' }}
@@ -458,7 +458,7 @@ export default function Registry({ onBack, onEditPatient, onExport, exporting, o
         <p style={{
           flexShrink: 0,
           fontSize: '12px',
-          color: 'rgba(255,255,255,0.28)',
+          color: 'rgba(255,255,255,0.5)',
           textAlign: 'center',
           margin: 0,
           padding: '4px 16px 10px',
@@ -467,7 +467,7 @@ export default function Registry({ onBack, onEditPatient, onExport, exporting, o
         }}>
           {selectionMode
             ? 'Toca filas para seleccionar o deseleccionar'
-            : 'Toca una fila para editarla'}
+            : 'Mantén presionado para seleccionar varios'}
         </p>
       )}
 
@@ -531,6 +531,7 @@ export default function Registry({ onBack, onEditPatient, onExport, exporting, o
                   </tr>
                 </thead>
                 <tbody>
+                  <tr aria-hidden="true"><td colSpan={100} style={{ height: '10px', padding: 0, border: 'none' }} /></tr>
                   {patients.map((p) => {
                     const isSelected = selectedIds.has(p._row)
                     return (
