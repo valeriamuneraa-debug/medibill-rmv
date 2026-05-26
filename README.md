@@ -177,42 +177,65 @@ See [ARCHITECTURE.md](./ARCHITECTURE.md) for the full annotated diagram.
 flowchart TD
     subgraph INPUT["📥 Entrada"]
         A[Historia clínica impresa]
-        B[Pacientes_2026.xlsx — plantilla]
+        B[Pacientes_2026.xlsx]
     end
+
     subgraph PWA["🌐 PWA — medibill-rmv.vercel.app"]
-        C[Setup] --> D[DatePicker]
-        D --> E[Camera]
-        E -->|base64 comprimida| F[/api/extract — Vercel Function]
-        F -->|JSON extraído| G[Review — 6 campos + confianza]
-        G --> H[ClinicalData — Opcional]
-        H --> I[Success]
-        I --> J[Registry — Búsqueda + multi-selección]
-        J --> K[PatientEdit]
+        C[Setup — Carga plantilla]
+        D[DatePicker — Fecha de cirugía]
+        E[Camera — Foto / Imagen / PDF]
+        F[api/extract — Vercel Function]
+        G[Review — 6 campos + confianza]
+        H[ClinicalData — Procedimiento y Factura Dian]
+        I[Success]
+        J[Registry — Busqueda y multi-seleccion]
+        K[PatientEdit]
     end
-    subgraph ANTHROPIC["🤖 Anthropic claude-sonnet-4-6"]
-        L[Extracción visual estructurada]
+
+    subgraph ANTHROPIC["🤖 Anthropic API"]
+        L[claude-sonnet-4-6]
     end
+
     subgraph STORAGE["💾 IndexedDB — Local"]
         M[(Workbook acumulado)]
-        N[(Cola de emisión)]
+        N[(Cola de emision)]
     end
+
     subgraph EXTENSION["🔌 Chrome Extension"]
-        P[Content Script — Rellena form]
+        O[Popup — Gestion de cola]
+        P[Content Script — Form autofill]
     end
+
+    subgraph EMISION["🏛️ facturador.emision.co"]
+        Q[Formulario Agregar Cliente]
+    end
+
     subgraph OUTPUT["📤 Salida"]
-        R[.xlsx con Resumen SUMPRODUCT]
+        R[Pacientes_2026.xlsx con Resumen]
         S[Cliente registrado sin escritura]
     end
+
     A --> E
     B --> C
-    F <-->|imagen + prompt / JSON| L
-    H --> M
-    K --> M
-    I --> N
+    C --> M
+    D --> E
+    E -->|base64 comprimida 200KB| F
+    F -->|prompt estructurado| L
+    L -->|JSON plus confidence scores| F
+    F -->|datos extraidos| G
+    G -->|datos verificados| H
+    H -->|fila completa| M
+    H --> I
+    I -->|Enviar a emision| N
+    I --> J
+    J --> K
     J -->|Bulk send| N
-    M --> R
+    K --> M
+    M -->|SheetJS export| R
+    N --> O
     N --> P
-    P --> S
+    P -->|fillField y fillSelect| Q
+    Q --> S
 ```
 
 ---

@@ -4,64 +4,64 @@
 flowchart TD
     subgraph INPUT["📥 Entrada"]
         A[Historia clínica impresa]
-        B[Pacientes_2026.xlsx — plantilla]
+        B[Pacientes_2026.xlsx]
     end
 
     subgraph PWA["🌐 PWA — medibill-rmv.vercel.app"]
-        C[Setup\nCarga plantilla .xlsx]
-        D[DatePicker\nSelección de fecha de cirugía]
-        E[Camera\nFotografiar / subir imagen / PDF]
-        F[/api/extract\nVercel Serverless Function]
-        G[Review\n6 campos + indicadores de confianza]
-        H[ClinicalData\nProcedimiento · Presupuesto · Factura Dian]
+        C[Setup — Carga plantilla]
+        D[DatePicker — Fecha de cirugía]
+        E[Camera — Foto / Imagen / PDF]
+        F[api/extract — Vercel Function]
+        G[Review — 6 campos + confianza]
+        H[ClinicalData — Procedimiento y Factura Dian]
         I[Success]
-        J[Registry\nBúsqueda + multi-selección]
-        K[PatientEdit\nEdición de datos clínicos]
+        J[Registry — Busqueda y multi-seleccion]
+        K[PatientEdit]
     end
 
     subgraph ANTHROPIC["🤖 Anthropic API"]
-        L[claude-sonnet-4-6\nExtracción visual estructurada]
+        L[claude-sonnet-4-6]
     end
 
-    subgraph STORAGE["💾 IndexedDB — Dispositivo local"]
-        M[(Workbook acumulado\nPacientes_2026)]
-        N[(Cola de emisión\nPacientes pendientes)]
+    subgraph STORAGE["💾 IndexedDB — Local"]
+        M[(Workbook acumulado)]
+        N[(Cola de emision)]
     end
 
-    subgraph EXTENSION["🔌 Chrome Extension — Sideloaded"]
-        O[Popup\nGestión de cola]
-        P[Content Script\nRellena formulario con IDs confirmados]
+    subgraph EXTENSION["🔌 Chrome Extension"]
+        O[Popup — Gestion de cola]
+        P[Content Script — Form autofill]
     end
 
     subgraph EMISION["🏛️ facturador.emision.co"]
-        Q[Formulario Agregar Cliente\nclient_name · client_document_number\nclient_organization_type · dropdowns]
+        Q[Formulario Agregar Cliente]
     end
 
     subgraph OUTPUT["📤 Salida"]
-        R[Pacientes_2026_fecha.xlsx\nHoja 1 + Resumen con SUMPRODUCT]
-        S[Cliente registrado en e-Misión\nSin escritura manual]
+        R[Pacientes_2026.xlsx con Resumen]
+        S[Cliente registrado sin escritura]
     end
 
     A --> E
     B --> C
     C --> M
     D --> E
-    E -->|"base64 comprimida ~200KB"| F
-    F -->|"imagen + prompt estructurado en español"| L
-    L -->|"JSON + confidence scores"| F
-    F -->|"datos extraídos"| G
-    G -->|"datos verificados"| H
-    H -->|"fila completa"| M
+    E -->|base64 comprimida 200KB| F
+    F -->|prompt estructurado| L
+    L -->|JSON plus confidence scores| F
+    F -->|datos extraidos| G
+    G -->|datos verificados| H
+    H -->|fila completa| M
     H --> I
-    I -->|"Enviar a emisión"| N
+    I -->|Enviar a emision| N
     I --> J
     J --> K
-    J -->|"Selección múltiple"| N
+    J -->|Bulk send| N
     K --> M
-    M -->|"SheetJS export"| R
+    M -->|SheetJS export| R
     N --> O
     N --> P
-    P -->|"fillField + fillSelect\ncon 1500ms delay para cascada"| Q
+    P -->|fillField y fillSelect| Q
     Q --> S
 ```
 
