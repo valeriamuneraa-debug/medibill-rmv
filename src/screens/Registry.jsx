@@ -147,7 +147,7 @@ export default function Registry({ onBack, onEditPatient, onExport, exporting, o
   const [bulkDeleteConfirm, setBulkDeleteConfirm] = useState(false)
   const [bulkDeleting, setBulkDeleting]         = useState(false)
   const [bulkEmitting, setBulkEmitting]         = useState(false)
-
+  const [searchQuery, setSearchQuery]           = useState('')
 
   useEffect(() => {
     if (!emisionToast) return
@@ -222,12 +222,15 @@ export default function Registry({ onBack, onEditPatient, onExport, exporting, o
   // ── Bulk send (all patients, from normal-mode footer) ─────────────────────
 
   async function handleBulkEmision() {
-    if (!patients?.length || bulkSending) return
+    const targets = searchQuery.trim()
+      ? patients.filter(p => p.nombre?.toLowerCase().includes(searchQuery.toLowerCase()))
+      : patients
+    if (!targets?.length || bulkSending) return
     setBulkSending(true)
     setBulkConfirm(false)
     try {
-      const result = await sendBatchToEmision(patients.map(toEmisionPayload))
-      const n = patients.length
+      const result = await sendBatchToEmision(targets.map(toEmisionPayload))
+      const n = targets.length
       setEmisionToast(
         result === 'sent'
           ? `${n} paciente${n !== 1 ? 's' : ''} enviado${n !== 1 ? 's' : ''} a la cola`
@@ -295,6 +298,11 @@ export default function Registry({ onBack, onEditPatient, onExport, exporting, o
   // ── Render ────────────────────────────────────────────────────────────────
 
   const selectedCount = selectedIds.size
+  const filtered = patients
+    ? (searchQuery.trim()
+        ? patients.filter(p => p.nombre?.toLowerCase().includes(searchQuery.toLowerCase()))
+        : patients)
+    : null
 
   return (
     <div
@@ -471,6 +479,82 @@ export default function Registry({ onBack, onEditPatient, onExport, exporting, o
         </p>
       )}
 
+      {/* ── Search bar ── */}
+      {patients && patients.length > 0 && !selectionMode && (
+        <div style={{ flexShrink: 0, padding: '0 16px 8px', background: '#172137' }}>
+          <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+            <svg
+              width="16" height="16" viewBox="0 0 16 16" fill="none"
+              aria-hidden="true"
+              style={{ position: 'absolute', left: '12px', pointerEvents: 'none' }}
+            >
+              <circle cx="6.5" cy="6.5" r="5" stroke="rgba(255,255,255,0.4)" strokeWidth="1.5" />
+              <path d="M11 11L14.5 14.5" stroke="rgba(255,255,255,0.4)" strokeWidth="1.5" strokeLinecap="round" />
+            </svg>
+            <input
+              type="search"
+              className="search-input"
+              value={searchQuery}
+              onChange={e => setSearchQuery(e.target.value)}
+              placeholder="Buscar paciente..."
+              aria-label="Buscar paciente por nombre"
+              autoComplete="off"
+              style={{
+                width: '100%',
+                height: '40px',
+                background: 'rgba(255,255,255,0.08)',
+                border: '1px solid rgba(255,255,255,0.15)',
+                borderRadius: '8px',
+                color: '#ffffff',
+                fontSize: '15px',
+                fontFamily: 'Outfit, sans-serif',
+                padding: '0 36px 0 38px',
+                outline: 'none',
+                touchAction: 'manipulation',
+              }}
+              onFocus={e => { e.currentTarget.style.borderColor = 'rgba(255,255,255,0.4)' }}
+              onBlur={e => { e.currentTarget.style.borderColor = searchQuery ? 'rgba(255,255,255,0.4)' : 'rgba(255,255,255,0.15)' }}
+            />
+            {searchQuery && (
+              <button
+                onClick={() => setSearchQuery('')}
+                aria-label="Limpiar búsqueda"
+                style={{
+                  position: 'absolute',
+                  right: '8px',
+                  background: 'none',
+                  border: 'none',
+                  cursor: 'pointer',
+                  padding: '4px',
+                  minHeight: '32px',
+                  minWidth: '32px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  touchAction: 'manipulation',
+                }}
+              >
+                <svg width="13" height="13" viewBox="0 0 13 13" fill="none" aria-hidden="true">
+                  <path d="M1 1l11 11M12 1L1 12" stroke="rgba(255,255,255,0.55)" strokeWidth="1.8" strokeLinecap="round" />
+                </svg>
+              </button>
+            )}
+          </div>
+          {searchQuery.trim() && (
+            <p style={{
+              fontSize: '12px',
+              color: 'rgba(255,255,255,0.4)',
+              margin: '6px 0 0',
+              textAlign: 'center',
+              fontFamily: 'Outfit, sans-serif',
+              letterSpacing: '0.01em',
+            }}>
+              {filtered.length} paciente{filtered.length !== 1 ? 's' : ''} encontrado{filtered.length !== 1 ? 's' : ''}
+            </p>
+          )}
+        </div>
+      )}
+
       {/* ── Scrollable rows ── */}
       <div
         style={{
@@ -511,6 +595,23 @@ export default function Registry({ onBack, onEditPatient, onExport, exporting, o
               Los pacientes que apruebes aparecerán aquí.
             </p>
           </div>
+        ) : filtered.length === 0 ? (
+          <div style={{
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: '80px 32px',
+            gap: '12px',
+            textAlign: 'center',
+          }}>
+            <p style={{ fontSize: '18px', fontWeight: 500, color: 'rgba(255,255,255,0.7)', margin: 0 }}>
+              Sin resultados
+            </p>
+            <p style={{ fontSize: '14px', color: 'rgba(255,255,255,0.35)', margin: 0, lineHeight: 1.6 }}>
+              No se encontraron pacientes con ese nombre.
+            </p>
+          </div>
         ) : (
           <>
               <table style={{
@@ -532,7 +633,7 @@ export default function Registry({ onBack, onEditPatient, onExport, exporting, o
                 </thead>
                 <tbody>
                   <tr aria-hidden="true"><td colSpan={100} style={{ height: '10px', padding: 0, border: 'none' }} /></tr>
-                  {patients.map((p) => {
+                  {filtered.map((p) => {
                     const isSelected = selectedIds.has(p._row)
                     return (
                       <tr
@@ -750,13 +851,13 @@ export default function Registry({ onBack, onEditPatient, onExport, exporting, o
                   Enviando...
                 </>
               ) : (
-                `Enviar todos a emisión (${patients.length})`
+                `Enviar todos a emisión (${filtered.length})`
               )}
             </button>
           ) : (
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '4px 0', marginBottom: '10px' }}>
               <span style={{ fontFamily: 'Outfit, sans-serif', fontSize: '13px', color: 'rgba(255,255,255,0.48)', flex: 1, lineHeight: 1.4 }}>
-                ¿Enviar {patients.length} paciente{patients.length !== 1 ? 's' : ''} a la cola?
+                ¿Enviar {filtered.length} paciente{filtered.length !== 1 ? 's' : ''} a la cola?
               </span>
               <button
                 onClick={handleBulkEmision}

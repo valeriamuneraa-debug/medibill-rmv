@@ -50,6 +50,15 @@ input[type="date"]::-webkit-calendar-picker-indicator {
   outline-offset: 3px;
 }
 
+.search-input::placeholder {
+  color: rgba(255, 255, 255, 0.4);
+}
+.search-input::-webkit-search-cancel-button,
+.search-input::-webkit-search-decoration {
+  display: none;
+  -webkit-appearance: none;
+}
+
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {
     animation-duration: 0.01ms !important;
