@@ -11,7 +11,7 @@ were the primary standard against which all AI proposals were evaluated.
 
 ---
 
-## Resistance #1 — The Copiar para Emisión Rejection ⭐ STRONGEST ENTRY
+## Resistance #1 — The Copiar para Emisión Rejection STRONGEST ENTRY
 
 **What AI proposed:**
 A "Copiar para emisión" flow in which each patient field 

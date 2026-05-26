@@ -1,4 +1,4 @@
-import * as XLSX from 'xlsx'
+import * as XLSX from 'xlsx-js-style'
 import { getWorkbook, setWorkbook } from './indexedDB.js'
 
 const SHEET_NAME = 'Hoja 1'
@@ -413,4 +413,149 @@ export async function updatePatient(rowIndex, fields) {
 
   buildResumen(wb)
   await setWorkbook(XLSX.write(wb, { type: 'base64', bookType: 'xlsx' }))
+}
+
+// ── Styled standalone export ──────────────────────────────────────────────────
+
+const MONTHS_ES = [
+  'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
+  'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'
+];
+
+const COLUMNS = [
+  'Nombre', 'Fecha', 'ID', 'Edad', 'Teléfono', 'Dirección', 'E-mail',
+  'Procedimiento', 'Presupuesto', 'Clínica', 'Implantes', 'Instrum',
+  'Tiempo', 'Factura Dian', 'Profit', 'Profit Día', 'Profit Acumulado Mes'
+];
+
+const STYLE_MONTH_HEADER = {
+  font: { bold: true, color: { rgb: 'FFFFFF' }, name: 'Arial', sz: 12 },
+  fill: { fgColor: { rgb: '172137' } },
+  alignment: { horizontal: 'left', vertical: 'center', indent: 1 },
+  border: {
+    top:    { style: 'thin', color: { rgb: '172137' } },
+    bottom: { style: 'thin', color: { rgb: '172137' } },
+  },
+};
+
+const STYLE_COL_HEADER = {
+  font: { bold: true, color: { rgb: '172137' }, name: 'Arial', sz: 10 },
+  fill: { fgColor: { rgb: 'E8EAEF' } },
+  alignment: { horizontal: 'left', vertical: 'center' },
+  border: { bottom: { style: 'thin', color: { rgb: '172137' } } },
+};
+
+const STYLE_DATA     = { font: { name: 'Arial', sz: 10 }, alignment: { vertical: 'center' } };
+const STYLE_DATA_ALT = { ...STYLE_DATA, fill: { fgColor: { rgb: 'F7F8FA' } } };
+const STYLE_NO_DATE  = {
+  ...STYLE_MONTH_HEADER,
+  fill: { fgColor: { rgb: '8A93A6' } },
+};
+
+function parseDateExport(v) {
+  if (!v) return null;
+  const d = v instanceof Date ? v : new Date(v);
+  return isNaN(d.getTime()) ? null : d;
+}
+
+function sortByFecha(patients) {
+  return [...patients].sort((a, b) => {
+    const da = parseDateExport(a.fecha), db = parseDateExport(b.fecha);
+    if (!da && !db) return 0;
+    if (!da) return 1;
+    if (!db) return -1;
+    return da - db;
+  });
+}
+
+function patientToRow(p) {
+  return [
+    p.nombre ?? '', parseDateExport(p.fecha) ?? '', p.id ?? '', p.edad ?? '',
+    p.telefono ?? '', p.direccion ?? '', p.email ?? '',
+    p.procedimiento ?? '', p.presupuesto ?? '', p.clinica ?? '',
+    p.implantes ?? '', p.instrum ?? '', p.tiempo ?? '',
+    p.facturaDian ?? '', p.profit ?? '', p.profitDia ?? '',
+    p.profitAcumuladoMes ?? '',
+  ];
+}
+
+export function exportToXlsx(patients, filename = 'Pacientes_2026.xlsx') {
+  const sorted = sortByFecha(patients);
+
+  const buckets = new Map();
+  const noDate = [];
+  for (const p of sorted) {
+    const d = parseDateExport(p.fecha);
+    if (!d) { noDate.push(p); continue; }
+    const m = d.getMonth();
+    if (!buckets.has(m)) buckets.set(m, []);
+    buckets.get(m).push(p);
+  }
+
+  const aoa = [];
+  const styles = new Map();
+  const merges = [];
+  let r = 0;
+
+  const pushMonthSection = (label, monthPatients, headerStyle = STYLE_MONTH_HEADER) => {
+    aoa.push([label, ...Array(COLUMNS.length - 1).fill('')]);
+    for (let c = 0; c < COLUMNS.length; c++) {
+      styles.set(XLSX.utils.encode_cell({ r, c }), headerStyle);
+    }
+    merges.push({ s: { r, c: 0 }, e: { r, c: COLUMNS.length - 1 } });
+    r++;
+
+    aoa.push([...COLUMNS]);
+    for (let c = 0; c < COLUMNS.length; c++) {
+      styles.set(XLSX.utils.encode_cell({ r, c }), STYLE_COL_HEADER);
+    }
+    r++;
+
+    monthPatients.forEach((p, i) => {
+      aoa.push(patientToRow(p));
+      const rowStyle = i % 2 === 0 ? STYLE_DATA : STYLE_DATA_ALT;
+      for (let c = 0; c < COLUMNS.length; c++) {
+        styles.set(XLSX.utils.encode_cell({ r, c }), rowStyle);
+      }
+      r++;
+    });
+
+    aoa.push([]);
+    r++;
+  };
+
+  for (let m = 0; m < 12; m++) {
+    if (!buckets.has(m)) continue;
+    pushMonthSection(MONTHS_ES[m], buckets.get(m));
+  }
+
+  if (noDate.length) {
+    pushMonthSection('Sin fecha asignada', noDate, STYLE_NO_DATE);
+  }
+
+  const ws = XLSX.utils.aoa_to_sheet(aoa);
+
+  for (const [addr, s] of styles.entries()) {
+    if (!ws[addr]) ws[addr] = { t: 's', v: '' };
+    ws[addr].s = s;
+  }
+
+  for (let row = 0; row < r; row++) {
+    const addr = XLSX.utils.encode_cell({ r: row, c: 1 });
+    if (ws[addr] && ws[addr].v instanceof Date) {
+      ws[addr].t = 'd';
+      ws[addr].z = 'dd/mm/yyyy';
+    }
+  }
+
+  ws['!merges'] = merges;
+  ws['!cols'] = [
+    { wch: 28 }, { wch: 12 }, { wch: 14 }, { wch: 6 },  { wch: 14 }, { wch: 28 },
+    { wch: 28 }, { wch: 28 }, { wch: 14 }, { wch: 16 }, { wch: 18 }, { wch: 14 },
+    { wch: 10 }, { wch: 14 }, { wch: 14 }, { wch: 14 }, { wch: 22 },
+  ];
+
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Hoja 1');
+  XLSX.writeFile(wb, filename);
 }
