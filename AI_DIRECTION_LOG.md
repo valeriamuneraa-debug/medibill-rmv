@@ -381,7 +381,83 @@ patient records accumulated in the current year.
 
 ---
 
-*Total logged entries: 12*
+## Entry 13 — Marketing Minute Production Strategy
+
+**What I asked AI to do:**
+Help me build a 60-second Marketing Minute 
+commercial for the class deliverable, in a way 
+that was genuinely advertising-quality rather 
+than a product demo.
+
+**What AI initially produced:**
+A Claude Code ffmpeg pipeline that animated app 
+screenshots with Ken Burns zooms and crossfade 
+transitions, used the Mac `say` command for 
+voiceover, and synthesized sound effects 
+programmatically. The result looked like a 
+Google Slides export with audio.
+
+**What I changed and why:**
+After seeing the output, I rejected the entire 
+approach and directed a three-tool production 
+pipeline instead: Higgsfield for AI-generated 
+cinematic b-roll and animated app clips, 
+ElevenLabs for human-quality voiceover, and 
+CapCut for manual editorial assembly. I also 
+identified that the commercial needed real 
+narrative b-roll — not just animated 
+screenshots — and directed a specific shot list 
+based on my father's actual clinical environment: 
+Medellín aerial, surgeon walking, hands copying 
+paper to keyboard, phone photographing the form, 
+app reveal, checkmark tap.
+
+**Outcome:** A 60-second commercial assembled in 
+CapCut from 8 Higgsfield-generated clips, 5 
+ElevenLabs voiceover lines recorded with the 
+Charlotte voice, and manually placed title cards 
+matching the approved storyboard exactly.
+
+---
+
+## Entry 14 — Voiceover Script Direction
+
+**What I asked AI to do:**
+Write a voiceover script for the 60-second 
+commercial based on the story of my father's 
+workflow and the tool's impact.
+
+**What AI produced:**
+A 12-line narrative script covering my father's 
+technological dependency, my departure for 
+college, the per-patient time cost, and the 
+tool's resolution. Emotionally explicit, 
+story-driven, first-person perspective of the 
+daughter building the tool for her father.
+
+**What I changed and why:**
+Rejected the narrative approach as too corny and 
+trying too hard to storytell. Directed a minimal 
+script of five lines total with intentional 
+silence through most of the commercial. Specified 
+a combination of Option C (near-silent, music and 
+visuals carrying the weight) and Option A 
+(factual numbers as the only verbal proof point). 
+The approved lines: "Too many forms." / "Too 
+little time." / "Eighteen minutes. Down to two." 
+/ "Your time is yours." / "Invest it in what 
+truly matters." Everything else was silence.
+
+**Outcome:** Charlotte (ElevenLabs) recorded all 
+five lines. Voiceover placed at precise timestamps 
+in CapCut: lines 1–2 during the b-roll problem 
+sequence, line 3 during the 18→2 text card, 
+lines 4–5 during the closing tagline card. 
+Total spoken words in the commercial: 21.
+
+---
+
+*Total logged entries: 14*
 *Minimum required: 5*
 *All directions given under supervision of 
 Dr. Rodrigo Múnera Vélez, the tool's sole user.*

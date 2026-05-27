@@ -282,6 +282,214 @@ posture shaped the entire class deliverable scope.
 
 ---
 
-*Total documented resistance entries: 8*
+## Resistance #9 — The Google Slideshow Rejection
+
+**What AI proposed:**
+A 60-second commercial built entirely in Claude Code 
+using ffmpeg to animate static screenshots with Ken 
+Burns zoom effects, crossfade transitions, and a Mac 
+`say` command voiceover. The result was delivered as 
+two MP4 files (16:9 and 9:16) with text cards, 
+panning effects, and a synthesized ambient music pad.
+
+**What I said (verbatim from the session):**
+"I don't think I like this... what I don't like is 
+that if Claude is going to take the motion media 
+approach, it should do it in a cool fast paced way, 
+not just like a google slideshow."
+
+**What I did instead:**
+Rejected the entire ffmpeg-animated-screenshot 
+approach and directed a full rebuild using Higgsfield 
+AI video generation for real cinematic motion clips — 
+Medellín aerial footage, a surgeon walking a clinic 
+corridor, hands setting down paper forms, a phone 
+photographing a document, a checkmark tap. These 
+replaced the Ken Burns zoom on PNGs entirely. 
+Assembly moved to CapCut for manual, precise 
+editorial control.
+
+**Why this matters:**
+AI defaulted to what was technically achievable with 
+the tools already in use (ffmpeg, Claude Code) rather 
+than what the deliverable actually required. A 
+Marketing Minute is a commercial, not a screen 
+recording with transitions. My rejection forced a 
+complete rethinking of the production pipeline — 
+from automated script to human-directed editorial 
+assembly — and the $50 Higgsfield investment was 
+my decision to make the tool match the ambition 
+of the deliverable.
+
+---
+
+## Resistance #10 — The Corny Voiceover Rejection
+
+**What AI proposed:**
+A 12-line voiceover script telling the full story of 
+my father's technological dependency, my departure 
+for college, the 18-minute billing process, and the 
+tool's resolution. Lines included: "Every surgeon in 
+Medellín has a story," "His hands save lives," "When 
+his daughter left for college... he was left alone 
+with the forms," and "So she built something."
+
+**What I said:**
+"This is too corny I don't like it, it is too 
+personal and trying too hard to story tell."
+
+**What I did instead:**
+Rejected the narrative voiceover entirely and 
+directed a minimal script of five lines total, with 
+long intentional silences through most of the 
+commercial. The only lines kept were the two most 
+functional: "Too many forms. Too little time." as 
+the problem statement, "Eighteen minutes. Down to 
+two." as the proof point, and "Your time is yours. 
+Invest it in what truly matters." as the tagline. 
+The emotional weight of the ad was shifted to the 
+visuals and the silence — not the narration.
+
+**Why this matters:**
+AI defaulted to storytelling because it had access 
+to the story. But the strongest advertisements do 
+not explain their emotional content — they create 
+conditions for the viewer to feel it. My rejection 
+came from an instinct about what a real commercial 
+sounds like: confident, spare, and trusting of the 
+audience. The story is in the images. The voice 
+is there to punctuate, not narrate.
+
+---
+
+## Resistance #11 — The Mac Voice Rejection
+
+**What AI built:**
+A voiceover pipeline using the Mac `say` command 
+with the Samantha voice at rate 145, converted from 
+AIFF to WAV via ffmpeg. This was presented as a 
+free, no-additional-cost solution built directly 
+into the Claude Code pipeline.
+
+**What I said:**
+"The voice absolutely gross."
+
+**What I did instead:**
+Rejected the synthesized system voice entirely and 
+used ElevenLabs with the Charlotte voice instead, 
+generating each line separately and downloading as 
+MP3 files that were then converted to WAV via ffmpeg 
+for CapCut compatibility. This required a separate 
+account and produced a genuinely human-sounding 
+result with natural breath, cadence, and emotional 
+register appropriate for a premium brand commercial.
+
+**Why this matters:**
+A robotic voiceover on a commercial built to 
+represent my father's professional brand would have 
+undermined the entire visual effort. The `say` 
+command voice is adequate for accessibility features 
+and screen readers — it is not adequate for 
+advertising. AI optimized for pipeline integration 
+and cost; I optimized for the final product's 
+quality. These are different objectives and mine 
+was correct.
+
+---
+
+## Resistance #12 — The Failed Assembly Rejection
+
+**What AI built:**
+A second full video assembly after the slideshow 
+rejection, this time incorporating the Higgsfield 
+clips. The result had wrong text content that was 
+never approved, fabricated cards not in the agreed 
+storyboard, a grainy filter applied by ffmpeg, 
+voiceover timing misaligned with the visual beats, 
+and the robotic Mac voice despite the ElevenLabs 
+discussion.
+
+**What I said:**
+"Why does it have text that we did not agree on, 
+additionally it is ridiculously slow and why does 
+it have a random grainy filter and why is the text 
+so badly placed in comparison to the voiceover and 
+why is the voice absolutely gross."
+
+**What I did instead:**
+Rejected the automated assembly pipeline entirely. 
+Moved all final assembly to CapCut, a professional 
+video editing application, where I had direct manual 
+control over every cut point, every audio placement, 
+every transition, and every text card. The ElevenLabs 
+WAV files were imported and placed frame-accurately. 
+No automated script touched the final edit.
+
+**Why this matters:**
+This resistance documents the fundamental limitation 
+of using a code-execution environment as a substitute 
+for a video editor. Claude Code with ffmpeg can 
+concatenate clips and apply filters — it cannot make 
+editorial judgments, honor approved storyboards, or 
+produce broadcast-quality audio mixing. The two 
+failed automated assemblies consumed significant 
+time and credits. The manual CapCut assembly took 
+less time and produced a better result. For creative 
+deliverables with precise timing requirements, the 
+right tool is a timeline editor operated by the 
+person who knows what the final product should 
+look like.
+
+---
+
+## Resistance #13 — The Missing Pain Identified
+
+**What the AI-directed shot list contained:**
+B-roll clips of Medellín at night, a surgeon walking 
+a corridor, paper forms on a desk, a phone 
+photographing a document, and a checkmark 
+confirmation tap. The storyboard moved from 
+"paper forms exist" directly to "phone 
+photographs the form."
+
+**What I identified:**
+The ad was showing the problem as an object — a 
+stack of paper — without showing the act of 
+suffering through it. There was no clip that 
+depicted what my father actually did every night: 
+sitting at a laptop, picking up a paper form, 
+reading a field, typing it in, setting the form 
+down, picking it up again, repeating for every 
+patient. That repetitive physical action is the 
+real antagonist of the commercial, not the 
+paper itself.
+
+**What I did instead:**
+Directed an additional Higgsfield generation 
+specifically for this moment: an overhead close-up 
+of surgeon's hands moving slowly between a paper 
+medical form and a laptop keyboard, picking up the 
+paper to read it, setting it down, typing, picking 
+it up again — shot in slow motion with shallow 
+depth of field, no face visible. This clip was 
+inserted between the paper forms clip and the phone 
+photographing clip, creating a three-beat visual 
+sequence: here is the problem, here is the pain of 
+living with it, here is the moment it ends.
+
+**Why this matters:**
+This addition came entirely from my knowledge of 
+what my father's actual workflow looked like — I 
+had done this work alongside him hundreds of times. 
+AI generated a competent shot list from the 
+narrative I provided. It did not know that the 
+most important image in the commercial was the one 
+that showed the repetition, because repetition is 
+what makes the before state feel unbearable. That 
+insight was mine.
+
+---
+
+*Total documented resistance entries: 13*
 *All decisions made under the direct supervision of 
 Dr. Rodrigo Múnera Vélez, the tool's sole user.*

@@ -113,7 +113,7 @@ felt trustworthy enough for real patient data.
 
 **Key workarounds that revealed what was broken:**
 
-- His daughter (me) acting as a human copy-paste machine between his
+- Me acting as a human copy-paste machine between his
   Excel spreadsheet and the government portal
 - Manual Google searches to find what Colombian department a patient's
   city belongs to when only a partial address is on the form
@@ -262,9 +262,6 @@ Dr. RM.*
 ---
 
 ## Five Questions Reflection
-
-*[WRITE THIS YOURSELF after the presentation — the brief says this is
-your final self-audit and must be your own reflection.]*
 
 **1. Can I defend this?**
 Yes, I can defend the decisions I made because almost every important feature came 
