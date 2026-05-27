@@ -3,6 +3,10 @@
 
 **Live URL:** https://medibill-rmv.vercel.app
 **Chrome Extension:** `/extension` folder — sideload in developer mode
+**Design Research Compilation:** [`Design_Direction_Research_Compilation.md.pdf`](./Design_Direction_Research_Compilation.md.pdf)
+**Marketing Minute:** [`public/Assignment3Ad.mp4`](./public/Assignment3Ad.mp4)
+**AI Direction Log:** [`AI_DIRECTION_LOG.md`](./AI_DIRECTION_LOG.md)
+**Records of Resistance:** [`RECORDS_OF_RESISTANCE.md`](./RECORDS_OF_RESISTANCE.md)
 
 > A Progressive Web App + Chrome Extension that lets Dr. RM,
 > an independent plastic surgeon in Colombia, photograph a patient's printed
