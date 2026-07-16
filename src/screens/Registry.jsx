@@ -3,13 +3,13 @@ import { readPatients, bulkDeletePatients } from '../lib/xlsx.js'
 
 const EXTENSION_ID = 'ojjbjnbminciinjlfmgmggccjebafjap'
 
-async function sendToEmision(patientData) {
+async function sendToEmision(patientData, messageType = 'ADD_TO_QUEUE') {
   if (typeof chrome !== 'undefined' && chrome.runtime?.sendMessage) {
     return new Promise((resolve) => {
       try {
         chrome.runtime.sendMessage(
           EXTENSION_ID,
-          { type: 'ADD_TO_QUEUE', patient: patientData },
+          { type: messageType, patient: patientData },
           (response) => {
             if (chrome.runtime.lastError || !response?.ok) {
               navigator.clipboard.writeText(JSON.stringify(patientData, null, 2))
@@ -244,6 +244,12 @@ export default function Registry({ onBack, onEditPatient, onExport, exporting, o
   async function handleEmision(e, patient) {
     e.stopPropagation()
     const result = await sendToEmision(toEmisionPayload(patient))
+    setEmisionToast(EMISION_TOAST[result])
+  }
+
+  async function handleEmisionFront(e, patient) {
+    e.stopPropagation()
+    const result = await sendToEmision(toEmisionPayload(patient), 'ADD_TO_QUEUE_FRONT')
     setEmisionToast(EMISION_TOAST[result])
   }
 
@@ -667,7 +673,7 @@ export default function Registry({ onBack, onEditPatient, onExport, exporting, o
                     <TH width="140px" right>Factura Dian</TH>
                     <TH width="140px" right>Presupuesto</TH>
                     {!selectionMode && <TH width="28px" />}
-                    {!selectionMode && <TH width="88px" />}
+                    {!selectionMode && <TH width="150px" />}
                   </tr>
                 </thead>
                 <tbody>
@@ -808,29 +814,57 @@ export default function Registry({ onBack, onEditPatient, onExport, exporting, o
                             onTouchStart={(e) => e.stopPropagation()}
                             onContextMenu={(e) => e.stopPropagation()}
                           >
-                            <button
-                              onClick={(e) => handleEmision(e, p)}
-                              style={{
-                                fontFamily: 'Outfit, sans-serif',
-                                fontSize: '11px',
-                                fontWeight: 500,
-                                color: 'rgba(255,255,255,0.65)',
-                                background: 'none',
-                                border: '1px solid rgba(255,255,255,0.2)',
-                                borderRadius: '8px',
-                                padding: '6px 10px',
-                                minHeight: '36px',
-                                cursor: 'pointer',
-                                touchAction: 'manipulation',
-                                whiteSpace: 'nowrap',
-                                letterSpacing: '0.02em',
-                                transition: 'border-color 150ms ease, color 150ms ease',
-                              }}
-                              onMouseEnter={(e) => { e.currentTarget.style.borderColor = 'rgba(255,255,255,0.45)'; e.currentTarget.style.color = '#ffffff' }}
-                              onMouseLeave={(e) => { e.currentTarget.style.borderColor = 'rgba(255,255,255,0.2)'; e.currentTarget.style.color = 'rgba(255,255,255,0.65)' }}
-                            >
-                              → Emisión
-                            </button>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                              <button
+                                onClick={(e) => handleEmision(e, p)}
+                                style={{
+                                  fontFamily: 'Outfit, sans-serif',
+                                  fontSize: '11px',
+                                  fontWeight: 500,
+                                  color: 'rgba(255,255,255,0.65)',
+                                  background: 'none',
+                                  border: '1px solid rgba(255,255,255,0.2)',
+                                  borderRadius: '8px',
+                                  padding: '6px 10px',
+                                  minHeight: '36px',
+                                  cursor: 'pointer',
+                                  touchAction: 'manipulation',
+                                  whiteSpace: 'nowrap',
+                                  letterSpacing: '0.02em',
+                                  transition: 'border-color 150ms ease, color 150ms ease',
+                                }}
+                                onMouseEnter={(e) => { e.currentTarget.style.borderColor = 'rgba(255,255,255,0.45)'; e.currentTarget.style.color = '#ffffff' }}
+                                onMouseLeave={(e) => { e.currentTarget.style.borderColor = 'rgba(255,255,255,0.2)'; e.currentTarget.style.color = 'rgba(255,255,255,0.65)' }}
+                              >
+                                → Emisión
+                              </button>
+
+                              {/* Secondary: send to front of queue */}
+                              <button
+                                onClick={(e) => handleEmisionFront(e, p)}
+                                aria-label={`Enviar a ${p.nombre || 'paciente'} al primero de la cola de emisión`}
+                                style={{
+                                  fontFamily: 'Outfit, sans-serif',
+                                  fontSize: '10px',
+                                  fontWeight: 500,
+                                  color: 'rgba(255,255,255,0.4)',
+                                  background: 'none',
+                                  border: '1px solid rgba(255,255,255,0.12)',
+                                  borderRadius: '8px',
+                                  padding: '6px 8px',
+                                  minHeight: '36px',
+                                  cursor: 'pointer',
+                                  touchAction: 'manipulation',
+                                  whiteSpace: 'nowrap',
+                                  letterSpacing: '0.02em',
+                                  transition: 'border-color 150ms ease, color 150ms ease',
+                                }}
+                                onMouseEnter={(e) => { e.currentTarget.style.borderColor = 'rgba(255,255,255,0.3)'; e.currentTarget.style.color = 'rgba(255,255,255,0.7)' }}
+                                onMouseLeave={(e) => { e.currentTarget.style.borderColor = 'rgba(255,255,255,0.12)'; e.currentTarget.style.color = 'rgba(255,255,255,0.4)' }}
+                              >
+                                ↑ Primero
+                              </button>
+                            </div>
                           </td>
                         )}
                       </tr>

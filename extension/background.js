@@ -16,6 +16,16 @@ chrome.runtime.onMessageExternal.addListener((message, sender, sendResponse) => 
       return true // keep channel open for async response
     }
 
+    case 'ADD_TO_QUEUE_FRONT': {
+      chrome.storage.local.get({ [QUEUE_KEY]: [] }, (data) => {
+        const updated = [message.patient, ...data[QUEUE_KEY]]
+        chrome.storage.local.set({ [QUEUE_KEY]: updated }, () => {
+          sendResponse({ ok: true, queueLength: updated.length })
+        })
+      })
+      return true
+    }
+
     case 'GET_QUEUE': {
       chrome.storage.local.get({ [QUEUE_KEY]: [] }, (data) => {
         sendResponse({ queue: data[QUEUE_KEY] })
