@@ -14,6 +14,8 @@ export default function DatePicker({ onContinue, onRegistry, onReset }) {
   const [resetPhase, setResetPhase]   = useState(null) // null | 'options' | 'loading' | 'success'
   const [migratedCount, setMigratedCount] = useState(0)
   const [devInfoOpen, setDevInfoOpen] = useState(false)
+  const [resetError, setResetError]   = useState(null)
+  const [confirmClearAll, setConfirmClearAll] = useState(false)
   const resetInputRef = useRef(null)
 
   function handleSubmit(e) {
@@ -29,9 +31,8 @@ export default function DatePicker({ onContinue, onRegistry, onReset }) {
       const count = await migrateWorkbook(file, true)
       setMigratedCount(count)
       setResetPhase('success')
-      setTimeout(() => setResetPhase(null), 3500)
     } catch (err) {
-      alert(err.message || 'Error al procesar el archivo')
+      setResetError(err.message || 'Error al procesar el archivo')
       setResetPhase('options')
     }
     e.target.value = ''
@@ -43,7 +44,7 @@ export default function DatePicker({ onContinue, onRegistry, onReset }) {
       await clearWorkbook()
       onReset()
     } catch (err) {
-      alert(err.message || 'Error al limpiar')
+      setResetError(err.message || 'Error al limpiar')
       setResetPhase('options')
     }
   }
@@ -57,7 +58,7 @@ export default function DatePicker({ onContinue, onRegistry, onReset }) {
       <input
         ref={resetInputRef}
         type="file"
-        accept=".xlsx,.xls"
+        accept=".xlsx"
         style={{ display: 'none' }}
         onChange={handleMigrateFile}
       />
@@ -73,7 +74,7 @@ export default function DatePicker({ onContinue, onRegistry, onReset }) {
             display: 'flex',
             alignItems: 'flex-end',
           }}
-          onClick={() => { if (resetPhase === 'options') setResetPhase(null) }}
+          onClick={() => { if (resetPhase === 'options') { setResetPhase(null); setConfirmClearAll(false) } }}
         >
           <div
             style={{
@@ -121,10 +122,35 @@ export default function DatePicker({ onContinue, onRegistry, onReset }) {
                 <p style={{ fontFamily: 'Outfit, sans-serif', fontSize: '14px', color: 'rgba(255,255,255,0.45)', margin: 0, textAlign: 'center', lineHeight: 1.5 }}>
                   Se conservaron {migratedCount} paciente{migratedCount !== 1 ? 's' : ''}.
                 </p>
+                <button
+                  onClick={() => setResetPhase(null)}
+                  style={{
+                    fontFamily: 'Outfit, sans-serif',
+                    fontSize: '16px',
+                    fontWeight: 600,
+                    color: '#172137',
+                    background: '#ffffff',
+                    border: 'none',
+                    borderRadius: '12px',
+                    padding: '16px',
+                    width: '100%',
+                    minHeight: '56px',
+                    cursor: 'pointer',
+                    touchAction: 'manipulation',
+                    transition: 'transform 100ms ease',
+                    marginTop: '8px',
+                  }}
+                  onMouseDown={(e) => { e.currentTarget.style.transform = 'scale(0.98)' }}
+                  onMouseUp={(e) => { e.currentTarget.style.transform = 'scale(1)' }}
+                  onTouchStart={(e) => { e.currentTarget.style.transform = 'scale(0.98)' }}
+                  onTouchEnd={(e) => { e.currentTarget.style.transform = 'scale(1)' }}
+                >
+                  Continuar
+                </button>
               </div>
             )}
 
-            {resetPhase === 'options' && (
+            {resetPhase === 'options' && !confirmClearAll && (
               <>
                 <p style={{ fontFamily: 'Outfit, sans-serif', fontSize: '18px', fontWeight: 600, color: '#ffffff', margin: '0 0 2px' }}>
                   Reestablecer plantilla
@@ -132,6 +158,12 @@ export default function DatePicker({ onContinue, onRegistry, onReset }) {
                 <p style={{ fontFamily: 'Outfit, sans-serif', fontSize: '14px', color: 'rgba(255,255,255,0.42)', margin: '0 0 8px', lineHeight: 1.55 }}>
                   Elige cómo proceder con los datos existentes.
                 </p>
+
+                {resetError && (
+                  <p role="alert" style={{ fontFamily: 'Outfit, sans-serif', fontSize: '13px', color: 'rgba(255,120,120,0.9)', textAlign: 'center', margin: '-4px 0 4px' }}>
+                    {resetError}
+                  </p>
+                )}
 
                 <button
                   onClick={() => resetInputRef.current?.click()}
@@ -165,7 +197,7 @@ export default function DatePicker({ onContinue, onRegistry, onReset }) {
                 </button>
 
                 <button
-                  onClick={handleClearAll}
+                  onClick={() => setConfirmClearAll(true)}
                   style={{
                     fontFamily: 'Outfit, sans-serif',
                     fontSize: '15px',
@@ -211,6 +243,90 @@ export default function DatePicker({ onContinue, onRegistry, onReset }) {
                   onMouseLeave={(e) => { e.currentTarget.style.color = 'rgba(255,255,255,0.32)' }}
                 >
                   Cancelar
+                </button>
+              </>
+            )}
+
+            {resetPhase === 'options' && confirmClearAll && (
+              <>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                  <p style={{
+                    fontSize: '16px',
+                    lineHeight: 1.55,
+                    color: '#ffffff',
+                    textAlign: 'center',
+                    margin: 0,
+                    fontFamily: 'Outfit, sans-serif',
+                    fontWeight: 600,
+                  }}>
+                    ¿Borrar todo el registro?
+                  </p>
+                  <p style={{
+                    fontSize: '14px',
+                    lineHeight: 1.5,
+                    color: 'rgba(255,255,255,0.45)',
+                    textAlign: 'center',
+                    margin: 0,
+                    fontFamily: 'Outfit, sans-serif',
+                  }}>
+                    Esta acción no se puede deshacer.
+                  </p>
+                </div>
+
+                {resetError && (
+                  <p role="alert" style={{ fontFamily: 'Outfit, sans-serif', fontSize: '13px', color: 'rgba(255,120,120,0.9)', textAlign: 'center', margin: '-4px 0 4px' }}>
+                    {resetError}
+                  </p>
+                )}
+
+                {/* Cancelar = primary (safe action) */}
+                <button
+                  onClick={() => setConfirmClearAll(false)}
+                  style={{
+                    fontFamily: 'Outfit, sans-serif',
+                    fontSize: '16px',
+                    fontWeight: 600,
+                    color: '#172137',
+                    background: '#ffffff',
+                    border: 'none',
+                    borderRadius: '12px',
+                    padding: '16px',
+                    minHeight: '56px',
+                    cursor: 'pointer',
+                    touchAction: 'manipulation',
+                    transition: 'transform 100ms ease',
+                  }}
+                  onMouseDown={(e) => { e.currentTarget.style.transform = 'scale(0.98)' }}
+                  onMouseUp={(e) => { e.currentTarget.style.transform = 'scale(1)' }}
+                  onTouchStart={(e) => { e.currentTarget.style.transform = 'scale(0.98)' }}
+                  onTouchEnd={(e) => { e.currentTarget.style.transform = 'scale(1)' }}
+                >
+                  Cancelar
+                </button>
+
+                {/* Borrar todo = destructive ghost */}
+                <button
+                  onClick={handleClearAll}
+                  style={{
+                    fontFamily: 'Outfit, sans-serif',
+                    fontSize: '15px',
+                    fontWeight: 500,
+                    color: 'rgba(255,100,100,0.9)',
+                    background: 'none',
+                    border: '1.5px solid rgba(255,100,100,0.3)',
+                    borderRadius: '12px',
+                    padding: '14px',
+                    minHeight: '52px',
+                    cursor: 'pointer',
+                    touchAction: 'manipulation',
+                    transition: 'transform 100ms ease, color 150ms ease',
+                  }}
+                  onMouseDown={(e) => { e.currentTarget.style.transform = 'scale(0.98)' }}
+                  onMouseUp={(e) => { e.currentTarget.style.transform = 'scale(1)' }}
+                  onTouchStart={(e) => { e.currentTarget.style.transform = 'scale(0.98)' }}
+                  onTouchEnd={(e) => { e.currentTarget.style.transform = 'scale(1)' }}
+                >
+                  Borrar todo
                 </button>
               </>
             )}
@@ -281,6 +397,7 @@ export default function DatePicker({ onContinue, onRegistry, onReset }) {
                 type="date"
                 value={date}
                 onChange={(e) => setDate(e.target.value)}
+                max={new Date().toISOString().split('T')[0]}
                 required
                 aria-required="true"
                 style={{
@@ -391,12 +508,12 @@ export default function DatePicker({ onContinue, onRegistry, onReset }) {
             {onReset && (
               <button
                 type="button"
-                onClick={() => setResetPhase('options')}
+                onClick={() => { setResetError(null); setConfirmClearAll(false); setResetPhase('options') }}
                 style={{
                   fontFamily: 'Outfit, sans-serif',
                   fontSize: '13px',
                   fontWeight: 400,
-                  color: 'rgba(255,255,255,0.28)',
+                  color: 'rgba(255,255,255,0.5)',
                   background: 'none',
                   border: 'none',
                   cursor: 'pointer',
@@ -407,7 +524,7 @@ export default function DatePicker({ onContinue, onRegistry, onReset }) {
                   letterSpacing: '0.01em',
                 }}
                 onMouseEnter={(e) => { e.currentTarget.style.color = 'rgba(255,255,255,0.58)' }}
-                onMouseLeave={(e) => { e.currentTarget.style.color = 'rgba(255,255,255,0.28)' }}
+                onMouseLeave={(e) => { e.currentTarget.style.color = 'rgba(255,255,255,0.5)' }}
               >
                 Reestablecer plantilla
               </button>
