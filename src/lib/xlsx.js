@@ -34,7 +34,7 @@ const MONTH_NAMES = [
 // Explicit number formats. These MUST be stamped on every numeric cell so the
 // template's existing date format can never bleed through and render an integer
 // (e.g. an age of 29) as a date (29/1/1900).
-const FMT_INT      = '0'          // Edad, Instrum, Tiempo, ID — plain integer
+const FMT_INT      = '0'          // Edad, Instrum, Tiempo — plain integer
 const FMT_CURRENCY = '"$"#,##0'   // Presupuesto, Factura Dian
 
 function dateSerial(isoDate) {
@@ -151,7 +151,7 @@ export async function appendPatient(patient, dateStr) {
   // Patient identity fields — always populated
   setCell(ws, row, COL.NOMBRE,    patient.nombre    ?? '',              's')
   setCell(ws, row, COL.FECHA,     dateSerial(dateStr),                  'n', 'dd/mm/yyyy')
-  setCell(ws, row, COL.ID,        parseInt(patient.id,   10) || 0,      'n', FMT_INT)
+  setCell(ws, row, COL.ID,        parseInt(patient.id,   10) || 0,      'n')
   setCell(ws, row, COL.EDAD,      parseInt(patient.edad, 10) || 0,      'n', FMT_INT)
   setCell(ws, row, COL.TELEFONO,  String(patient.telefono  ?? ''),      's')
   setCell(ws, row, COL.DIRECCION, patient.direccion ?? '',              's')
@@ -394,6 +394,22 @@ export async function updatePatient(rowIndex, fields) {
     }
   }
 
+  // ── Identity fields ──────────────────────────────────────────────────────
+  // Only write when the field was actually provided (undefined = leave as-is).
+  if (fields.nombre !== undefined)    setCell(ws, rowIndex, COL.NOMBRE,    String(fields.nombre),    's')
+  if (fields.telefono !== undefined)  setCell(ws, rowIndex, COL.TELEFONO,  String(fields.telefono),  's') // string preserves leading zeros
+  if (fields.direccion !== undefined) setCell(ws, rowIndex, COL.DIRECCION, String(fields.direccion), 's')
+  if (fields.email !== undefined)     setCell(ws, rowIndex, COL.EMAIL,     String(fields.email),     's')
+  // Cedula (ID) is written as a STRING so Excel never re-types it as a number/date.
+  if (fields.id !== undefined)        setCell(ws, rowIndex, COL.ID,        String(fields.id),        's')
+  // Edad is a plain integer.
+  save(COL.EDAD, fields.edad, true, FMT_INT)
+  // Fecha: the form supplies an ISO date (yyyy-mm-dd); store it as an Excel serial.
+  if (fields.fecha !== undefined && fields.fecha !== '') {
+    setCell(ws, rowIndex, COL.FECHA, dateSerial(fields.fecha), 'n', 'dd/mm/yyyy')
+  }
+
+  // ── Procedure fields ─────────────────────────────────────────────────────
   save(COL.PROCEDIMIENTO, fields.procedimiento, false)
   save(COL.PRESUPUESTO,   fields.presupuesto,   true,  FMT_CURRENCY)
   save(COL.CLINICA,       fields.clinica,        false)
@@ -567,13 +583,7 @@ export function exportToXlsx(patients, filename = 'Pacientes_2026.xlsx') {
 
   // Force explicit number formats on every numeric column so the template's
   // date formatting can never render an integer (age, money) as a date.
-  const NUMERIC_FMT = {
-    3:  '0',          // Edad
-    8:  '"$"#,##0',   // Presupuesto
-    11: '0',          // Instrum
-    12: '0',          // Tiempo
-    13: '"$"#,##0',   // Factura Dian
-  };
+  const NUMERIC_FMT = { 3: '0', 8: '"$"#,##0', 11: '0', 12: '0', 13: '"$"#,##0' };
   for (let row = 0; row < r; row++) {
     const dateAddr = XLSX.utils.encode_cell({ r: row, c: 1 });
     if (ws[dateAddr] && ws[dateAddr].v instanceof Date) {

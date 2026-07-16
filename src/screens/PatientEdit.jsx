@@ -1,17 +1,49 @@
 import { useState } from 'react'
 
+// Convert a stored Excel date serial into an ISO yyyy-mm-dd string for <input type="date">.
+// Uses UTC throughout to avoid any off-by-one-day timezone drift.
+function serialToISO(serial) {
+  if (serial == null || serial === '') return ''
+  const n = Number(serial)
+  if (isNaN(n)) return ''
+  const dt = new Date((n - 25569) * 86400000)
+  if (isNaN(dt.getTime())) return ''
+  const y = dt.getUTCFullYear()
+  const m = String(dt.getUTCMonth() + 1).padStart(2, '0')
+  const d = String(dt.getUTCDate()).padStart(2, '0')
+  return `${y}-${m}-${d}`
+}
+
+// Identity fields — who the patient is. Rendered above the procedure data.
+const IDENTITY_FIELDS = [
+  { key: 'nombre',    label: 'Nombre',            inputMode: 'text',    type: 'text',  hint: null },
+  { key: 'fecha',     label: 'Fecha de cirugía',  inputMode: 'text',    type: 'date',  hint: null },
+  { key: 'id',        label: 'ID (cédula)',        inputMode: 'numeric', type: 'text',  hint: null },
+  { key: 'edad',      label: 'Edad',               inputMode: 'numeric', type: 'text',  hint: null },
+  { key: 'telefono',  label: 'Teléfono',           inputMode: 'tel',     type: 'text',  hint: null },
+  { key: 'direccion', label: 'Dirección',          inputMode: 'text',    type: 'text',  hint: null },
+  { key: 'email',     label: 'E-mail',             inputMode: 'email',   type: 'text',  hint: null },
+]
+
 const FIELDS = [
-  { key: 'procedimiento', label: 'Procedimiento',    inputMode: 'text',    hint: null },
-  { key: 'presupuesto',   label: 'Presupuesto',       inputMode: 'decimal', hint: 'Valor en pesos' },
-  { key: 'clinica',       label: 'Clínica',            inputMode: 'text',    hint: null },
-  { key: 'implantes',     label: 'Implantes',          inputMode: 'text',    hint: 'Ej: 325 300' },
-  { key: 'instrum',       label: 'Instrumentación',    inputMode: 'decimal', hint: 'Valor en pesos' },
-  { key: 'tiempo',        label: 'Tiempo (minutos)',   inputMode: 'numeric', hint: null },
-  { key: 'facturaDian',   label: 'Factura Dian',       inputMode: 'decimal', hint: 'Valor en pesos' },
+  { key: 'procedimiento', label: 'Procedimiento',    inputMode: 'text',    type: 'text', hint: null },
+  { key: 'presupuesto',   label: 'Presupuesto',       inputMode: 'decimal', type: 'text', hint: 'Valor en pesos' },
+  { key: 'clinica',       label: 'Clínica',            inputMode: 'text',    type: 'text', hint: null },
+  { key: 'implantes',     label: 'Implantes',          inputMode: 'text',    type: 'text', hint: 'Ej: 325 300' },
+  { key: 'instrum',       label: 'Instrumentación',    inputMode: 'decimal', type: 'text', hint: 'Valor en pesos' },
+  { key: 'tiempo',        label: 'Tiempo (minutos)',   inputMode: 'numeric', type: 'text', hint: null },
+  { key: 'facturaDian',   label: 'Factura Dian',       inputMode: 'decimal', type: 'text', hint: 'Valor en pesos' },
 ]
 
 export default function PatientEdit({ patient, onBack, onSave, onDelete }) {
   const [form, setForm] = useState({
+    nombre:        String(patient?.nombre ?? ''),
+    fecha:         serialToISO(patient?.fecha),
+    id:            patient?.id != null ? String(patient.id) : '',
+    edad:          patient?.edad != null ? String(patient.edad) : '',
+    telefono:      String(patient?.telefono ?? ''),
+    direccion:     String(patient?.direccion ?? ''),
+    email:         String(patient?.email ?? ''),
     procedimiento: String(patient?.procedimiento ?? ''),
     presupuesto:   patient?.presupuesto  != null ? String(patient.presupuesto)  : '',
     clinica:       String(patient?.clinica       ?? ''),
@@ -143,6 +175,57 @@ export default function PatientEdit({ patient, onBack, onSave, onDelete }) {
             fontSize: '18px',
             fontWeight: 600,
             margin: 0,
+            letterSpacing: '0.01em',
+            color: 'rgba(255,255,255,0.8)',
+          }}>
+            Datos del paciente
+          </h2>
+
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+            {IDENTITY_FIELDS.map(({ key, label, inputMode, type, hint }) => (
+              <div key={key} style={{ display: 'flex', flexDirection: 'column', gap: '5px' }}>
+                <label
+                  htmlFor={`edit-${key}`}
+                  style={{
+                    fontSize: '13px',
+                    fontWeight: 500,
+                    color: 'rgba(255,255,255,0.52)',
+                    letterSpacing: '0.03em',
+                  }}
+                >
+                  {label}
+                </label>
+                <input
+                  id={`edit-${key}`}
+                  type={type}
+                  inputMode={type === 'date' ? undefined : inputMode}
+                  value={form[key]}
+                  onChange={(e) => update(key, e.target.value)}
+                  onFocus={() => setFocusedField(key)}
+                  onBlur={() => setFocusedField(null)}
+                  autoComplete="off"
+                  placeholder=""
+                  style={{ ...inputStyle(key), colorScheme: 'dark' }}
+                />
+                {hint && (
+                  <span style={{
+                    fontSize: '12px',
+                    color: 'rgba(255,255,255,0.3)',
+                    fontWeight: 400,
+                    lineHeight: 1.4,
+                  }}>
+                    {hint}
+                  </span>
+                )}
+              </div>
+            ))}
+          </div>
+
+          <h2 style={{
+            fontSize: '18px',
+            fontWeight: 600,
+            margin: 0,
+            marginTop: '8px',
             letterSpacing: '0.01em',
             color: 'rgba(255,255,255,0.8)',
           }}>
