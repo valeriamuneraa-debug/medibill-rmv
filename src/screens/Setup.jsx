@@ -1,5 +1,6 @@
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { storeUploadedWorkbook, migrateWorkbook } from '../lib/xlsx.js'
+import { hasWorkbook } from '../lib/indexedDB.js'
 
 function SpreadsheetIcon() {
   return (
@@ -21,6 +22,8 @@ function UploadIcon() {
   )
 }
 
+const FOCUS_VISIBLE_STYLE = { outline: '2px solid rgba(255,255,255,0.7)', outlineOffset: '2px' }
+
 export default function Setup({ onReady }) {
   const inputRef       = useRef(null)
   const changeInputRef = useRef(null)
@@ -35,11 +38,16 @@ export default function Setup({ onReady }) {
   const [migrationCount, setMigrationCount] = useState(0)
   const [migrateError, setMigrateError]     = useState(null)
 
-  function handleFileChange(e) {
-    const file = e.target.files?.[0]
-    e.target.value = ''
+  const [templateExists, setTemplateExists] = useState(false)
+  const [focusedControl, setFocusedControl] = useState(null)
+
+  useEffect(() => {
+    hasWorkbook().then(setTemplateExists)
+  }, [])
+
+  function processSelectedFile(file) {
     if (!file) return
-    if (!file.name.endsWith('.xlsx')) {
+    if (!file.name.toLowerCase().endsWith('.xlsx')) {
       setError('Solo se aceptan archivos .xlsx')
       setSelectedFile(null)
       return
@@ -48,11 +56,29 @@ export default function Setup({ onReady }) {
     setSelectedFile(file)
   }
 
+  function handleFileChange(e) {
+    const file = e.target.files?.[0]
+    e.target.value = ''
+    processSelectedFile(file)
+  }
+
+  function handleDropzoneDragOver(e) {
+    if (loading) return
+    e.preventDefault()
+  }
+
+  function handleDropzoneDrop(e) {
+    e.preventDefault()
+    if (loading) return
+    const file = e.dataTransfer.files?.[0]
+    processSelectedFile(file)
+  }
+
   function handleChangeFileSelected(e) {
     const file = e.target.files?.[0]
     e.target.value = ''
     if (!file) return
-    if (!file.name.endsWith('.xlsx')) {
+    if (!file.name.toLowerCase().endsWith('.xlsx')) {
       setError('Solo se aceptan archivos .xlsx')
       return
     }
@@ -172,6 +198,7 @@ export default function Setup({ onReady }) {
               transition: 'background 150ms ease, border-color 150ms ease, transform 100ms ease',
               padding: '20px',
               touchAction: 'manipulation',
+              ...(focusedControl === 'dropzone' ? FOCUS_VISIBLE_STYLE : null),
             }}
             onMouseEnter={(e) => { if (!loading) e.currentTarget.style.background = 'rgba(255,255,255,0.11)' }}
             onMouseLeave={(e) => { if (!loading) e.currentTarget.style.background = selectedFile ? 'rgba(255,255,255,0.10)' : 'rgba(255,255,255,0.06)' }}
@@ -179,6 +206,10 @@ export default function Setup({ onReady }) {
             onMouseUp={(e) => { e.currentTarget.style.transform = 'scale(1)' }}
             onTouchStart={(e) => { if (!loading) e.currentTarget.style.transform = 'scale(0.99)' }}
             onTouchEnd={(e) => { e.currentTarget.style.transform = 'scale(1)' }}
+            onFocus={() => setFocusedControl('dropzone')}
+            onBlur={() => setFocusedControl(null)}
+            onDragOver={handleDropzoneDragOver}
+            onDrop={handleDropzoneDrop}
           >
             <SpreadsheetIcon />
             {selectedFile ? (
@@ -187,7 +218,7 @@ export default function Setup({ onReady }) {
                   {selectedFile.name}
                 </span>
                 <span style={{ fontSize: '12px', color: 'rgba(255,255,255,0.45)', fontWeight: 400 }}>
-                  Toca para cambiar archivo
+                  Selecciona otro archivo
                 </span>
               </div>
             ) : (
@@ -244,12 +275,15 @@ export default function Setup({ onReady }) {
               alignItems: 'center',
               justifyContent: 'center',
               gap: '10px',
+              ...(focusedControl === 'cargar' ? FOCUS_VISIBLE_STYLE : null),
             }}
             onMouseDown={(e) => { if (selectedFile && !loading) e.currentTarget.style.transform = 'scale(0.98)' }}
             onMouseUp={(e) => { e.currentTarget.style.transform = 'scale(1)' }}
             onMouseLeave={(e) => { e.currentTarget.style.transform = 'scale(1)' }}
             onTouchStart={(e) => { if (selectedFile && !loading) e.currentTarget.style.transform = 'scale(0.98)' }}
             onTouchEnd={(e) => { e.currentTarget.style.transform = 'scale(1)' }}
+            onFocus={() => setFocusedControl('cargar')}
+            onBlur={() => setFocusedControl(null)}
           >
             {loading ? (
               <>
@@ -279,7 +313,7 @@ export default function Setup({ onReady }) {
         {/* Explanatory note */}
         <p style={{
           fontSize: '13px',
-          color: 'rgba(255,255,255,0.28)',
+          color: 'rgba(255,255,255,0.6)',
           textAlign: 'center',
           margin: 0,
           lineHeight: 1.7,
@@ -288,31 +322,36 @@ export default function Setup({ onReady }) {
           Exporta cuando quieras — siempre descarga el registro completo.
         </p>
 
-        {/* Cambiar plantilla — replaces old Reiniciar */}
-        <button
-          type="button"
-          onClick={() => changeInputRef.current?.click()}
-          style={{
-            fontFamily: 'Outfit, sans-serif',
-            fontSize: '12px',
-            fontWeight: 400,
-            color: 'rgba(255,255,255,0.22)',
-            background: 'none',
-            border: 'none',
-            cursor: 'pointer',
-            textDecoration: 'underline',
-            textDecorationColor: 'rgba(255,255,255,0.15)',
-            textUnderlineOffset: '3px',
-            padding: '2px 0',
-            marginTop: '-8px',
-            touchAction: 'manipulation',
-            transition: 'color 150ms ease',
-          }}
-          onMouseEnter={(e) => { e.currentTarget.style.color = 'rgba(255,255,255,0.5)' }}
-          onMouseLeave={(e) => { e.currentTarget.style.color = 'rgba(255,255,255,0.22)' }}
-        >
-          Cambiar plantilla
-        </button>
+        {/* Cambiar plantilla — replaces old Reiniciar; only shown once a template exists */}
+        {templateExists && (
+          <button
+            type="button"
+            onClick={() => changeInputRef.current?.click()}
+            style={{
+              fontFamily: 'Outfit, sans-serif',
+              fontSize: '12px',
+              fontWeight: 400,
+              color: 'rgba(255,255,255,0.5)',
+              background: 'none',
+              border: 'none',
+              cursor: 'pointer',
+              textDecoration: 'underline',
+              textDecorationColor: 'rgba(255,255,255,0.15)',
+              textUnderlineOffset: '3px',
+              padding: '2px 0',
+              marginTop: '-8px',
+              touchAction: 'manipulation',
+              transition: 'color 150ms ease',
+              ...(focusedControl === 'cambiar' ? FOCUS_VISIBLE_STYLE : null),
+            }}
+            onMouseEnter={(e) => { e.currentTarget.style.color = 'rgba(255,255,255,0.7)' }}
+            onMouseLeave={(e) => { e.currentTarget.style.color = 'rgba(255,255,255,0.5)' }}
+            onFocus={() => setFocusedControl('cambiar')}
+            onBlur={() => setFocusedControl(null)}
+          >
+            Cambiar plantilla
+          </button>
+        )}
 
       </div>
 
@@ -408,11 +447,14 @@ export default function Setup({ onReady }) {
                       flexDirection: 'column',
                       alignItems: 'center',
                       gap: '3px',
+                      ...(focusedControl === 'keep' ? FOCUS_VISIBLE_STYLE : null),
                     }}
                     onMouseDown={(e) => { e.currentTarget.style.transform = 'scale(0.98)' }}
                     onMouseUp={(e) => { e.currentTarget.style.transform = 'scale(1)' }}
                     onTouchStart={(e) => { e.currentTarget.style.transform = 'scale(0.98)' }}
                     onTouchEnd={(e) => { e.currentTarget.style.transform = 'scale(1)' }}
+                    onFocus={() => setFocusedControl('keep')}
+                    onBlur={() => setFocusedControl(null)}
                   >
                     Mantener mis pacientes
                     <span style={{ fontSize: '12px', fontWeight: 400, color: 'rgba(23,33,55,0.55)' }}>
@@ -436,11 +478,14 @@ export default function Setup({ onReady }) {
                       cursor: 'pointer',
                       touchAction: 'manipulation',
                       transition: 'transform 100ms ease, color 150ms ease',
+                      ...(focusedControl === 'startFresh' ? FOCUS_VISIBLE_STYLE : null),
                     }}
                     onMouseDown={(e) => { e.currentTarget.style.transform = 'scale(0.98)' }}
                     onMouseUp={(e) => { e.currentTarget.style.transform = 'scale(1)' }}
                     onTouchStart={(e) => { e.currentTarget.style.transform = 'scale(0.98)' }}
                     onTouchEnd={(e) => { e.currentTarget.style.transform = 'scale(1)' }}
+                    onFocus={() => setFocusedControl('startFresh')}
+                    onBlur={() => setFocusedControl(null)}
                   >
                     Empezar desde cero
                   </button>
@@ -458,9 +503,12 @@ export default function Setup({ onReady }) {
                       padding: '8px 0',
                       touchAction: 'manipulation',
                       transition: 'color 150ms ease',
+                      ...(focusedControl === 'cancel' ? FOCUS_VISIBLE_STYLE : null),
                     }}
                     onMouseEnter={(e) => { e.currentTarget.style.color = 'rgba(255,255,255,0.65)' }}
                     onMouseLeave={(e) => { e.currentTarget.style.color = 'rgba(255,255,255,0.38)' }}
+                    onFocus={() => setFocusedControl('cancel')}
+                    onBlur={() => setFocusedControl(null)}
                   >
                     Cancelar
                   </button>
@@ -538,11 +586,14 @@ export default function Setup({ onReady }) {
                     cursor: 'pointer',
                     touchAction: 'manipulation',
                     transition: 'transform 100ms ease',
+                    ...(focusedControl === 'continue' ? FOCUS_VISIBLE_STYLE : null),
                   }}
                   onMouseDown={(e) => { e.currentTarget.style.transform = 'scale(0.98)' }}
                   onMouseUp={(e) => { e.currentTarget.style.transform = 'scale(1)' }}
                   onTouchStart={(e) => { e.currentTarget.style.transform = 'scale(0.98)' }}
                   onTouchEnd={(e) => { e.currentTarget.style.transform = 'scale(1)' }}
+                  onFocus={() => setFocusedControl('continue')}
+                  onBlur={() => setFocusedControl(null)}
                 >
                   Continuar
                 </button>
