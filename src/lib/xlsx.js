@@ -31,6 +31,12 @@ const MONTH_NAMES = [
   'Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre',
 ]
 
+// Explicit number formats. These MUST be stamped on every numeric cell so the
+// template's existing date format can never bleed through and render an integer
+// (e.g. an age of 29) as a date (29/1/1900).
+const FMT_INT      = '0'          // Edad, Instrum, Tiempo, ID — plain integer
+const FMT_CURRENCY = '"$"#,##0'   // Presupuesto, Factura Dian
+
 function dateSerial(isoDate) {
   const [y, m, d] = isoDate.split('-').map(Number)
   return Math.floor(new Date(Date.UTC(y, m - 1, d)).getTime() / 86400000) + 25569
@@ -145,8 +151,8 @@ export async function appendPatient(patient, dateStr) {
   // Patient identity fields — always populated
   setCell(ws, row, COL.NOMBRE,    patient.nombre    ?? '',              's')
   setCell(ws, row, COL.FECHA,     dateSerial(dateStr),                  'n', 'dd/mm/yyyy')
-  setCell(ws, row, COL.ID,        parseInt(patient.id,   10) || 0,      'n')
-  setCell(ws, row, COL.EDAD,      parseInt(patient.edad, 10) || 0,      'n')
+  setCell(ws, row, COL.ID,        parseInt(patient.id,   10) || 0,      'n', FMT_INT)
+  setCell(ws, row, COL.EDAD,      parseInt(patient.edad, 10) || 0,      'n', FMT_INT)
   setCell(ws, row, COL.TELEFONO,  String(patient.telefono  ?? ''),      's')
   setCell(ws, row, COL.DIRECCION, patient.direccion ?? '',              's')
   setCell(ws, row, COL.EMAIL,     patient.email     ?? '',              's')
@@ -158,16 +164,16 @@ export async function appendPatient(patient, dateStr) {
   if (patient.clinica)       setCell(ws, row, COL.CLINICA,       String(patient.clinica),       's')
   if (patient.implantes)     setCell(ws, row, COL.IMPLANTES,     String(patient.implantes),     's')
   if (patient.presupuesto != null && patient.presupuesto !== '') {
-    const n = Number(patient.presupuesto); if (!isNaN(n) && n !== 0) setCell(ws, row, COL.PRESUPUESTO, n, 'n', '"$"#,##0')
+    const n = Number(patient.presupuesto); if (!isNaN(n) && n !== 0) setCell(ws, row, COL.PRESUPUESTO, n, 'n', FMT_CURRENCY)
   }
   if (patient.instrum != null && patient.instrum !== '') {
-    const n = Number(patient.instrum); if (!isNaN(n) && n !== 0) setCell(ws, row, COL.INSTRUM, n, 'n')
+    const n = Number(patient.instrum); if (!isNaN(n) && n !== 0) setCell(ws, row, COL.INSTRUM, n, 'n', FMT_INT)
   }
   if (patient.tiempo != null && patient.tiempo !== '') {
-    const n = Number(patient.tiempo); if (!isNaN(n) && n !== 0) setCell(ws, row, COL.TIEMPO, n, 'n')
+    const n = Number(patient.tiempo); if (!isNaN(n) && n !== 0) setCell(ws, row, COL.TIEMPO, n, 'n', FMT_INT)
   }
   if (patient.facturaDian != null && patient.facturaDian !== '') {
-    const n = Number(patient.facturaDian); if (!isNaN(n) && n !== 0) setCell(ws, row, COL.FACTURA_DIAN, n, 'n', '"$"#,##0')
+    const n = Number(patient.facturaDian); if (!isNaN(n) && n !== 0) setCell(ws, row, COL.FACTURA_DIAN, n, 'n', FMT_CURRENCY)
   }
 
   expandRef(ws, row)
@@ -389,12 +395,12 @@ export async function updatePatient(rowIndex, fields) {
   }
 
   save(COL.PROCEDIMIENTO, fields.procedimiento, false)
-  save(COL.PRESUPUESTO,   fields.presupuesto,   true,  '"$"#,##0')
+  save(COL.PRESUPUESTO,   fields.presupuesto,   true,  FMT_CURRENCY)
   save(COL.CLINICA,       fields.clinica,        false)
   save(COL.IMPLANTES,     fields.implantes,      false)
-  save(COL.INSTRUM,       fields.instrum,        true)
-  save(COL.TIEMPO,        fields.tiempo,         true)
-  save(COL.FACTURA_DIAN,  fields.facturaDian,    true,  '"$"#,##0')
+  save(COL.INSTRUM,       fields.instrum,        true,  FMT_INT)
+  save(COL.TIEMPO,        fields.tiempo,         true,  FMT_INT)
+  save(COL.FACTURA_DIAN,  fields.facturaDian,    true,  FMT_CURRENCY)
 
   buildResumen(wb)
   await setWorkbook(XLSX.write(wb, { type: 'base64', bookType: 'xlsx' }))
@@ -559,11 +565,25 @@ export function exportToXlsx(patients, filename = 'Pacientes_2026.xlsx') {
     ws[addr].s = s;
   }
 
+  // Force explicit number formats on every numeric column so the template's
+  // date formatting can never render an integer (age, money) as a date.
+  const NUMERIC_FMT = {
+    3:  '0',          // Edad
+    8:  '"$"#,##0',   // Presupuesto
+    11: '0',          // Instrum
+    12: '0',          // Tiempo
+    13: '"$"#,##0',   // Factura Dian
+  };
   for (let row = 0; row < r; row++) {
-    const addr = XLSX.utils.encode_cell({ r: row, c: 1 });
-    if (ws[addr] && ws[addr].v instanceof Date) {
-      ws[addr].t = 'd';
-      ws[addr].z = 'dd/mm/yyyy';
+    const dateAddr = XLSX.utils.encode_cell({ r: row, c: 1 });
+    if (ws[dateAddr] && ws[dateAddr].v instanceof Date) {
+      ws[dateAddr].t = 'd';
+      ws[dateAddr].z = 'dd/mm/yyyy';
+    }
+    for (const [c, fmt] of Object.entries(NUMERIC_FMT)) {
+      const addr = XLSX.utils.encode_cell({ r: row, c: Number(c) });
+      const cell = ws[addr];
+      if (cell && cell.t === 'n') cell.z = fmt;
     }
   }
 
