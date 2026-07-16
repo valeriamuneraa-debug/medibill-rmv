@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { readPatients, bulkDeletePatients } from '../lib/xlsx.js'
 
 const EXTENSION_ID = 'ojjbjnbminciinjlfmgmggccjebafjap'
@@ -30,9 +30,9 @@ async function sendToEmision(patientData) {
 }
 
 const EMISION_TOAST = {
-  sent:   'Enviado a la cola de emisión',
-  copied: 'Datos copiados al portapapeles',
-  error:  'No se pudo enviar — verifica la extensión',
+  sent:   { text: 'Enviado a la cola de emisión', tone: 'success' },
+  copied: { text: 'Extensión no detectada — datos copiados, pégalos en e-Misión', tone: 'attention' },
+  error:  { text: 'No se pudo enviar — verifica la extensión', tone: 'attention' },
 }
 
 async function sendBatchToEmision(allPatients) {
@@ -149,9 +149,14 @@ export default function Registry({ onBack, onEditPatient, onExport, exporting, o
   const [bulkEmitting, setBulkEmitting]         = useState(false)
   const [searchQuery, setSearchQuery]           = useState('')
 
+  // Long-press (touch) selection entry
+  const longPressTimer = useRef(null)
+  const longPressFired = useRef(false)
+
   useEffect(() => {
     if (!emisionToast) return
-    const t = setTimeout(() => setEmisionToast(null), 3500)
+    const delay = emisionToast.tone === 'attention' ? 6000 : 3500
+    const t = setTimeout(() => setEmisionToast(null), delay)
     return () => clearTimeout(t)
   }, [emisionToast])
 
@@ -195,11 +200,34 @@ export default function Registry({ onBack, onEditPatient, onExport, exporting, o
   }
 
   function handleRowClick(patient) {
+    if (longPressFired.current) {
+      longPressFired.current = false
+      return
+    }
     if (selectionMode) {
       toggleSelect(patient)
     } else {
       onEditPatient(patient)
     }
+  }
+
+  // ── Long-press (touch) selection entry ────────────────────────────────────
+
+  function handleRowTouchStart(patient) {
+    longPressFired.current = false
+    clearTimeout(longPressTimer.current)
+    longPressTimer.current = setTimeout(() => {
+      longPressFired.current = true
+      if (!selectionMode) enterSelectionMode(patient)
+    }, 500)
+  }
+
+  function handleRowTouchMove() {
+    clearTimeout(longPressTimer.current)
+  }
+
+  function handleRowTouchEnd() {
+    clearTimeout(longPressTimer.current)
   }
 
   // ── Individual delete (context-menu / desktop) ────────────────────────────
@@ -233,7 +261,7 @@ export default function Registry({ onBack, onEditPatient, onExport, exporting, o
       const n = targets.length
       setEmisionToast(
         result === 'sent'
-          ? `${n} paciente${n !== 1 ? 's' : ''} enviado${n !== 1 ? 's' : ''} a la cola`
+          ? { text: `${n} paciente${n !== 1 ? 's' : ''} enviado${n !== 1 ? 's' : ''} a la cola`, tone: 'success' }
           : EMISION_TOAST.error
       )
     } finally {
@@ -252,7 +280,7 @@ export default function Registry({ onBack, onEditPatient, onExport, exporting, o
       const n = sel.length
       setEmisionToast(
         result === 'sent'
-          ? `${n} paciente${n !== 1 ? 's' : ''} enviado${n !== 1 ? 's' : ''} a emisión`
+          ? { text: `${n} paciente${n !== 1 ? 's' : ''} enviado${n !== 1 ? 's' : ''} a emisión`, tone: 'success' }
           : EMISION_TOAST.error
       )
       exitSelectionMode()
@@ -274,7 +302,7 @@ export default function Registry({ onBack, onEditPatient, onExport, exporting, o
       const n = sel.length
       const updated = await readPatients()
       setPatients(updated.filter(p => p.nombre && p.nombre.trim() !== '' && p.nombre !== 'Nombre'))
-      setEmisionToast(`${n} paciente${n !== 1 ? 's' : ''} eliminado${n !== 1 ? 's' : ''}`)
+      setEmisionToast({ text: `${n} paciente${n !== 1 ? 's' : ''} eliminado${n !== 1 ? 's' : ''}`, tone: 'success' })
       exitSelectionMode()
     } finally {
       setBulkDeleting(false)
@@ -496,8 +524,8 @@ export default function Registry({ onBack, onEditPatient, onExport, exporting, o
               className="search-input"
               value={searchQuery}
               onChange={e => setSearchQuery(e.target.value)}
-              placeholder="Buscar paciente..."
-              aria-label="Buscar paciente por nombre"
+              placeholder="Buscar por nombre..."
+              aria-label="Buscar por nombre"
               autoComplete="off"
               style={{
                 width: '100%',
@@ -540,7 +568,7 @@ export default function Registry({ onBack, onEditPatient, onExport, exporting, o
               </button>
             )}
           </div>
-          {searchQuery.trim() && (
+          {searchQuery.trim() ? (
             <p style={{
               fontSize: '12px',
               color: 'rgba(255,255,255,0.4)',
@@ -550,6 +578,17 @@ export default function Registry({ onBack, onEditPatient, onExport, exporting, o
               letterSpacing: '0.01em',
             }}>
               {filtered.length} paciente{filtered.length !== 1 ? 's' : ''} encontrado{filtered.length !== 1 ? 's' : ''}
+            </p>
+          ) : (
+            <p style={{
+              fontSize: '13px',
+              color: 'rgba(255,255,255,0.5)',
+              margin: '6px 0 0',
+              textAlign: 'center',
+              fontFamily: 'Outfit, sans-serif',
+              letterSpacing: '0.01em',
+            }}>
+              {patients.length} paciente{patients.length !== 1 ? 's' : ''}
             </p>
           )}
         </div>
@@ -644,6 +683,9 @@ export default function Registry({ onBack, onEditPatient, onExport, exporting, o
                           e.preventDefault()
                           if (!selectionMode) setDeleteTarget(p)
                         }}
+                        onTouchStart={() => handleRowTouchStart(p)}
+                        onTouchMove={handleRowTouchMove}
+                        onTouchEnd={handleRowTouchEnd}
                         style={{
                           cursor: 'pointer',
                           background: isSelected ? 'rgba(255,255,255,0.08)' : 'transparent',
@@ -851,13 +893,17 @@ export default function Registry({ onBack, onEditPatient, onExport, exporting, o
                   Enviando...
                 </>
               ) : (
-                `Enviar todos a emisión (${filtered.length})`
+                (searchQuery.trim()
+                  ? `Enviar resultados a emisión (${filtered.length})`
+                  : `Enviar todos a emisión (${filtered.length})`)
               )}
             </button>
           ) : (
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '4px 0', marginBottom: '10px' }}>
               <span style={{ fontFamily: 'Outfit, sans-serif', fontSize: '13px', color: 'rgba(255,255,255,0.48)', flex: 1, lineHeight: 1.4 }}>
-                ¿Enviar {filtered.length} paciente{filtered.length !== 1 ? 's' : ''} a la cola?
+                {searchQuery.trim()
+                  ? `¿Enviar los ${filtered.length} resultado${filtered.length !== 1 ? 's' : ''} a la cola?`
+                  : `¿Enviar ${filtered.length} paciente${filtered.length !== 1 ? 's' : ''} a la cola?`}
               </span>
               <button
                 onClick={handleBulkEmision}
@@ -1068,7 +1114,7 @@ export default function Registry({ onBack, onEditPatient, onExport, exporting, o
             pointerEvents: 'none',
           }}
         >
-          {emisionToast}
+          {emisionToast.text}
         </div>
       )}
 
